@@ -1,0 +1,97 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Login rebuilder\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2013-01-16 01:37+0900\n"
+"PO-Revision-Date: 2013-01-16 07:48+0900\n"
+"Last-Translator: takenori matsuura <takenori.matsuura@gmail.com>\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Poedit-KeywordsList: __;_e\n"
+"X-Poedit-Basepath: C:\\Program Files (x86)\\Apache Software Foundation"
+"\\Apache2.2\\htdocs\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+"X-Generator: Poedit 1.5.4\n"
+"X-Poedit-SearchPath-0: wp-content\\plugins\\login-rebuilder\n"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:99
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:167
+msgid "Settings"
+msgstr ""
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:104
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:167
+msgid "Login rebuilder"
+msgstr "ログインページ"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:125
+msgid "New login file is system file. Please change a file name."
+msgstr ""
+"指定されたログインファイル名は予約されています。ファイル名を変更してくださ"
+"い。"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:137
+msgid ""
+"However, failed to write a new login file to disk.\n"
+"Please change into the enabled writing of a disk or upload manually."
+msgstr ""
+"ただし、ログインファイルの書き込みに失敗しました。\n"
+"ディスクを書き込み可能に変更するか、手動でアップロードしてください。"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:144
+msgid "However, a new login file was not found."
+msgstr "ただし、新しいログインファイルが見つかりませんでした。"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:147
+msgid "However, the contents of a new login file are not in agreement."
+msgstr "ただし、ログインファイルの内容がおかしい可能性があります。"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:152
+msgid "Options saved."
+msgstr ""
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:179
+msgid "Response to an invalid request :"
+msgstr "無効なリクエスト時の応答 : "
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:181
+msgid "403 status"
+msgstr "403ステータス"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:182
+msgid "404 status"
+msgstr "404ステータス"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:183
+msgid "redirect to a site url"
+msgstr "サイトトップへリダイレクト"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:188
+msgid "Login file keyword :"
+msgstr "ログインファイルのキーワード :"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:193
+msgid "New login file :"
+msgstr "新しいログインファイル :"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:202
+msgid "Status :"
+msgstr "ステータス :"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:204
+msgid "in preparation"
+msgstr "準備中"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:205
+msgid "working"
+msgstr "稼働中"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:232
+msgid "Writing is possible"
+msgstr "書き込み可能"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:234
+msgid "Writing is impossible"
+msgstr "書き込み不可"

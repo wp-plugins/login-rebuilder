@@ -1,0 +1,306 @@
+<?php
+/*
+Plugin Name: Login rebuilder
+Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
+Description: This plug-in will make a new login page for your site.
+Author: tmatsuur
+Version: 1.0.0
+Author URI: http://12net.jp/
+*/
+
+/*
+ Copyright (C) 2013 tmatsuur (Email: takenori dot matsuura at 12net dot jp)
+This program is licensed under the GNU GPL Version 2.
+*/
+
+define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
+define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.0.0' );
+define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
+
+$plugin_login_rebuilder = new login_rebuilder();
+
+class login_rebuilder {
+	var $properties;
+	var $content = "<?php
+define( 'LOGIN_REBUILDER_SIGNATURE', '%sig%' );
+require_once './wp-login.php';
+?>";
+	const LOGIN_REBUILDER_PROPERTIES_NAME = 'login-rebuilder-properties';
+	const LOGIN_REBUILDER_RESPONSE_403 = 1;
+	const LOGIN_REBUILDER_RESPONSE_404 = 2;
+	const LOGIN_REBUILDER_RESPONSE_GO_HOME = 3;
+	const LOGIN_REBUILDER_STATUS_IN_PREPARATION = 0;
+	const LOGIN_REBUILDER_STATUS_WORKING = 1;
+
+	function __construct() {
+		load_plugin_textdomain( LOGIN_REBUILDER_DOMAIN, false, plugin_basename( dirname( __FILE__ ) ).'/languages' );
+		register_activation_hook( __FILE__ , array( &$this , 'init' ) );
+		register_deactivation_hook( __FILE__ , array( &$this , 'deactivation' ) );
+		$candidate = array( 'new-login.php', 'your-login.php', 'admin-login.php', 'wordpress-login.php', 'hidden-login.php' );
+		$this->properties = get_site_option( LOGIN_REBUILDER_PROPERTIES,
+			array( 'status'=>self::LOGIN_REBUILDER_STATUS_IN_PREPARATION,
+					'page'=>$candidate[ array_rand( $candidate ) ],
+					'keyword'=>$this->generate_keyword(),
+					'response'=>self::LOGIN_REBUILDER_RESPONSE_403 ) );
+		if ( is_multisite() )
+			$this->properties['status'] = get_option( LOGIN_REBUILDER_PROPERTIES, self::LOGIN_REBUILDER_STATUS_IN_PREPARATION );
+		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING &&
+			( !@file_exists( ABSPATH.$this->properties['page'] ) || !$this->is_valid_new_login_file() ) ) {
+			$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+		}
+		add_action( 'admin_menu', array( &$this, 'admin_menu' ) );
+		add_action( 'wp_ajax_login_rebuilder_try_save', array( &$this, 'try_save' ) );
+		add_filter( 'plugin_row_meta', array( &$this, 'plugin_row_meta' ), 9, 2 );
+		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
+			add_action( 'login_init', array( &$this, 'login_init' ) );
+			add_filter( 'site_url', array( &$this, 'site_url' ), 10, 4 );
+			add_filter( 'wp_redirect', array( &$this, 'wp_redirect' ), 10, 2 );
+		}
+	}
+	private function generate_keyword() {
+		return substr( str_shuffle( 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789' ), rand( 0, 60 ), 8 );
+	}
+	function init() {
+		if ( get_option( LOGIN_REBUILDER_DB_VERSION_NAME ) != LOGIN_REBUILDER_DB_VERSION ) {
+			update_option( LOGIN_REBUILDER_DB_VERSION_NAME, LOGIN_REBUILDER_DB_VERSION );
+		}
+	}
+	function deactivation() {
+		$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+		delete_option( LOGIN_REBUILDER_DB_VERSION_NAME );
+		if ( is_multisite() )
+			delete_option( LOGIN_REBUILDER_PROPERTIES );
+		else {
+			$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+			update_site_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
+		}
+	}
+
+	function login_init() {
+		if ( preg_match( '/\/wp\-login\.php/u', $_SERVER[REQUEST_URI] ) ||
+			( strpos( $_SERVER[REQUEST_URI], $this->properties['page'] ) !== false && ( !defined( 'LOGIN_REBUILDER_SIGNATURE' ) || $this->properties['keyword'] != LOGIN_REBUILDER_SIGNATURE ) ) ) {
+			switch ( $this->properties['response'] ) {
+				case LOGIN_REBUILDER_RESPONSE_GO_HOME:
+					wp_redirect( home_url() );
+					break;
+				case self::LOGIN_REBUILDER_RESPONSE_404:
+					status_header( 404 );
+					break;
+				case self::LOGIN_REBUILDER_RESPONSE_403:
+				default:
+					status_header( 403 );
+					break;
+			}
+			exit;
+		}
+	}
+	function site_url( $url, $path, $orig_scheme, $blog_id ) {
+		if ( $path == 'wp-login.php' &&
+			( is_user_logged_in() || strpos( $_SERVER[REQUEST_URI], $this->properties['page'] ) !== false ) )
+			$url = str_replace( 'wp-login.php', $this->properties['page'], $url );
+		return $url;
+	}
+	function wp_redirect( $location, $status ) {
+		if ( preg_match( '/\/'.str_replace( array( '-', '.' ), array( '\\-', '\\.' ), $this->properties['page'] ).'/u', $_SERVER[REQUEST_URI] ) )
+			$location = str_replace( 'wp-login.php', $this->properties['page'], $location );
+		return $location;
+	}
+	
+	function plugin_row_meta( $links, $file ) {
+		if ( $file == plugin_basename( dirname( __FILE__ ) ).'/'.basename( __FILE__ ) ) {
+			$links[] = '<a href="admin.php?'.self::LOGIN_REBUILDER_PROPERTIES_NAME.'">'.__( 'Settings' ).'</a>';
+		}
+		return $links;
+	}
+	function admin_menu() {
+		add_options_page( __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), 9, self::LOGIN_REBUILDER_PROPERTIES_NAME, array( &$this, 'properties' ) );
+	}
+
+	private function is_reserved_login_file( $filename ) {
+		return in_array( $filename,
+				array( 'index.php', 'wp-activate.php', 'wp-app.php', 'wp-atom.php', 'wp-blog-header.php',
+					'wp-comments-post.php', 'wp-commentsrss2.php', 'wp-config.php', 'wp-config-sample.php', 'wp-cron.php',
+					'wp-feed.php', 'wp-links-opml.php', 'wp-load.php', 'wp-login.php', 'wp-mail.php',
+					'wp-pass.php', 'wp-rdf.php', 'wp-register.php', 'wp-rss.php', 'wp-rss2.php',
+					'wp-settings.php', 'wp-signup.php', 'wp-trackback.php', 'xmlrpc.php' ) );
+	}
+	private function is_valid_new_login_file() {
+		return str_replace( '%sig%', $this->properties['keyword'], $this->content ) == trim( file_get_contents( ABSPATH.$this->properties['page'] ) );
+	}
+
+	function properties() {
+		$message = '';
+		if ( isset( $_POST['properties'] ) ) {
+			$_POST['properties']['page'] = trim( $_POST['properties']['page'] );
+			if ( $this->is_reserved_login_file( $_POST['properties']['page'] ) ) {
+				$message = __( 'New login file is system file. Please change a file name.' );
+				$this->properties = $_POST['properties'];
+			} else {
+				$message = __( 'Options saved.' ).' ';
+				if ( $this->properties['keyword'] != $_POST['properties']['keyword'] ||
+					$this->properties['page'] != $_POST['properties']['page'] ) {
+					$this->properties['keyword'] = $_POST['properties']['keyword'];
+					$this->properties['page'] = $_POST['properties']['page'];
+					$result = $this->try_save( array_merge( $_POST['properties'], array( 'mode'=>1 ) ) );
+					if ( $result['update'] ) {
+						$this->properties['status'] = intval( $_POST['properties']['status'] );
+					} else if ( !@file_exists( ABSPATH.$this->properties['page'] ) || !$this->is_valid_new_login_file() ) {
+						$message .= __( "However, failed to write a new login file to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
+						$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+					}
+				} else {
+					$this->properties['status'] = intval( $_POST['properties']['status'] );
+					if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
+						if ( !@file_exists( ABSPATH.$this->properties['page'] ) ) {
+							$message .= __( "However, a new login file was not found.", LOGIN_REBUILDER_DOMAIN );
+							$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+						} else if ( !$this->is_valid_new_login_file() ) {
+							$message .= __( "However, the contents of a new login file are not in agreement.", LOGIN_REBUILDER_DOMAIN );
+							$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+						}
+					}
+				}
+				$this->properties['response'] = intval( $_POST['properties']['response'] );
+				update_site_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
+				if ( is_multisite() )
+					update_option( LOGIN_REBUILDER_PROPERTIES, $this->properties['status'] );
+				if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ) {
+					$logout_from = site_url( $this->properties['page'] );
+					$logout_to = site_url( 'wp-login.php' );
+				} else {
+					$logout_from = site_url( 'wp-login.php' );
+					$logout_to = site_url( $this->properties['page'] );
+				}
+			}
+		}
+?>
+<div id="login-rebuilder-properties" class="wrap">
+<div id="icon-options-general" class="icon32"><br /></div>
+<h2><?php _e( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ); ?> <?php _e( 'Settings' ) ;?></h2>
+<?php if ( $message != '' ) { global $wp_version; ?>
+<?php if ( version_compare( $wp_version, '3.5', '>=' ) ) { ?>
+<div id="setting-error-settings_updated" class="updated settings-error"><p><strong><?php echo $message; ?></strong></p></div>
+<?php } else { ?>
+<div id="message" class="update fade"><p><?php echo $message; ?></p></div>
+<?php } } ?>
+
+<div id="login-rebuilder-widget" class="metabox-holder">
+<form method="post" action="<?php echo str_replace( '%07E', '~', $_REQUEST['REQUEST_URI'] ); ?>">
+<table summary="login rebuilder properties" class="form-table">
+<tr valign="top">
+<th><?php _e( 'Response to an invalid request :', LOGIN_REBUILDER_DOMAIN ); ?></th>
+<td>
+<input type="radio" name="properties[response]" id="properties_response_1" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_403 ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_403 ); ?> /><label for="properties_response_1">&nbsp;<span><?php _e( '403 status', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[response]" id="properties_response_2" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_404 ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_404 ); ?> /><label for="properties_response_2">&nbsp;<span><?php _e( '404 status', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[response]" id="properties_response_3" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_GO_HOME ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_GO_HOME ); ?> /><label for="properties_response_3">&nbsp;<span><?php _e( 'redirect to a site url', LOGIN_REBUILDER_DOMAIN ); echo ' ( '.home_url().' )'; ?></span></label><br />
+</td>
+</tr>
+
+<tr valign="top">
+<th><label for="properties_keyword"><?php _e( 'Login file keyword :', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
+<td><input type="text" name="properties[keyword]" id="properties_keyword" value="<?php _e( $this->properties['keyword'] ); ?>" class="regular-text code" /></td>
+</tr>
+
+<tr valign="top">
+<th rowspan="2"><label for="properties_page"><?php _e( 'New login file :', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
+<td><input type="text" name="properties[page]" id="properties_page" value="<?php _e( $this->properties['page'] ); ?>" class="regular-text code" />&nbsp;<span id="writable">&nbsp;</span></td>
+</tr>
+
+<tr valign="top">
+<td><textarea  name="properties[content]" id="login_page_content" rows="4" cols="60" style="font-family:monospace;" readonly="readonly"></textarea><input type="hidden" id="content_template" value="<?php echo $this->content; ?>" /></td>
+</tr>
+
+<tr valign="top">
+<th><?php _e( 'Status :', LOGIN_REBUILDER_DOMAIN ); ?></th>
+<td>
+<input type="radio" name="properties[status]" id="properties_status_0" value="<?php _e( self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?>" <?php checked( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?> /><label for="properties_status_0">&nbsp;<span><?php _e( 'in preparation', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[status]" id="properties_status_1" value="<?php _e( self::LOGIN_REBUILDER_STATUS_WORKING ); ?>" <?php checked( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ); ?> /><label for="properties_status_1">&nbsp;<span><?php _e( 'working', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+</td>
+</tr>
+
+<tr valign="top">
+<td colspan="2">
+<input type="submit" name="submit" value="<?php esc_attr_e( 'Save Changes' ); ?>" class="button-primary" />
+</td>
+</tr>
+</table>
+</form>
+</div>
+</div>
+<script type="text/javascript">
+jQuery( 'a' ).each( function () {
+	jQuery( this ).attr( 'href', jQuery( this ).attr( 'href' ).replace( '<?php echo $logout_from; ?>', '<?php echo $logout_to; ?>' ) );
+} );
+jQuery( '#properties_keyword' ).blur( function () {
+	jQuery( '#login_page_content' ).val( jQuery( '#content_template' ).val().replace( '%sig%', jQuery( this ).val() ) );
+} );
+jQuery( '#properties_page' ).blur( function () {
+	var url = jQuery.trim( jQuery( this ).val() );
+	if ( url != '' ) {
+		jQuery.post( '<?php echo admin_url( 'admin-ajax.php' ); ?>',
+			{ action: 'login_rebuilder_try_save', mode: 0, page: url },
+			function( response ) {
+				if ( response.data.writable ) {
+					jQuery( '#writable' ).text( '[<?php _e( 'Writing is possible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'blue' );
+				} else {
+					jQuery( '#writable' ).text( '[<?php _e( 'Writing is impossible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'orange' );
+				}
+			}, 'json' );
+	}
+} );
+jQuery( '#properties_keyword' ).blur();
+jQuery( '#properties_page' ).blur();
+</script>
+<?php
+	}
+
+	function try_save( $param = null ) {
+		if ( is_array( $param ) && count( $param ) > 0 )
+			extract( $param );
+		else
+			extract( $_POST );
+		if ( !isset( $mode ) || !isset( $page ) ) {
+			if ( is_null( $param ) || $param == '' )
+				exit;
+			else
+				return null;
+		}
+		$data = array(
+			'request'=>$page,
+			'path'=>ABSPATH.$page,
+			'exists'=>false,
+			'writable'=>false,
+			'update'=>false );
+		// exists
+		if ( @file_exists( $data['path'] ) )
+			$data['exists'] = true;
+		// writable
+		if ( ( $fp = @fopen( $data['path'] , 'a' ) ) !== false ) {
+			@fclose( $fp );
+			if ( !$data['exists'] )
+				@unlink( $data['path'] );
+			$data['writable'] = true;
+		}
+		if ( $mode == 1 ) {
+			// update
+			if ( ( $fp = @fopen( $data['path'], 'w' ) ) !== false ) {
+				@fwrite( $fp, stripslashes( $content ) );
+				@fclose( $fp );
+				@chmod( $data['path'], 0644 );
+				$data['update'] = true;
+			}
+		}
+		if ( is_null( $param ) || $param == '' ) {
+			if ( function_exists( 'wp_send_json_success' ) )
+				wp_send_json_success( $data );
+			else {
+				@header( 'Content-Type: application/json; charset=' . get_option( 'blog_charset' ) );
+				echo json_encode( array( 'success'=>true, 'data'=>$data ) );
+				exit;
+			}
+		} else
+			return $data;
+	}
+}
+?>
