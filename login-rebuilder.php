@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.0.0
+Version: 1.0.1
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.0.0' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.0.1' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 
 $plugin_login_rebuilder = new login_rebuilder();
@@ -81,7 +81,7 @@ require_once './wp-login.php';
 		if ( preg_match( '/\/wp\-login\.php/u', $_SERVER[REQUEST_URI] ) ||
 			( strpos( $_SERVER[REQUEST_URI], $this->properties['page'] ) !== false && ( !defined( 'LOGIN_REBUILDER_SIGNATURE' ) || $this->properties['keyword'] != LOGIN_REBUILDER_SIGNATURE ) ) ) {
 			switch ( $this->properties['response'] ) {
-				case LOGIN_REBUILDER_RESPONSE_GO_HOME:
+				case self::LOGIN_REBUILDER_RESPONSE_GO_HOME:
 					wp_redirect( home_url() );
 					break;
 				case self::LOGIN_REBUILDER_RESPONSE_404:
@@ -109,7 +109,7 @@ require_once './wp-login.php';
 	
 	function plugin_row_meta( $links, $file ) {
 		if ( $file == plugin_basename( dirname( __FILE__ ) ).'/'.basename( __FILE__ ) ) {
-			$links[] = '<a href="admin.php?'.self::LOGIN_REBUILDER_PROPERTIES_NAME.'">'.__( 'Settings' ).'</a>';
+			$links[] = '<a href="options-general.php?page='.self::LOGIN_REBUILDER_PROPERTIES_NAME.'">'.__( 'Settings' ).'</a>';
 		}
 		return $links;
 	}
