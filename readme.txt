@@ -1,5 +1,5 @@
 === Login rebuilder ===
-Contributors: takenori matsuura
+Contributors: tmatsuur
 Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
 Requires at least: 3.0.0
