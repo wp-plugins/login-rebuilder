@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.0.2
+Version: 1.0.3
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.0.2' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.0.3' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 
 $plugin_login_rebuilder = new login_rebuilder();
@@ -78,8 +78,8 @@ require_once './wp-login.php';
 	}
 
 	function login_init() {
-		if ( preg_match( '/\/wp\-login\.php/u', $_SERVER[REQUEST_URI] ) ||
-			( strpos( $_SERVER[REQUEST_URI], $this->properties['page'] ) !== false && ( !defined( 'LOGIN_REBUILDER_SIGNATURE' ) || $this->properties['keyword'] != LOGIN_REBUILDER_SIGNATURE ) ) ) {
+		if ( preg_match( '/\/wp\-login\.php/u', $_SERVER['REQUEST_URI'] ) ||
+			( strpos( $_SERVER['REQUEST_URI'], $this->properties['page'] ) !== false && ( !defined( 'LOGIN_REBUILDER_SIGNATURE' ) || $this->properties['keyword'] != LOGIN_REBUILDER_SIGNATURE ) ) ) {
 			switch ( $this->properties['response'] ) {
 				case self::LOGIN_REBUILDER_RESPONSE_GO_HOME:
 					wp_redirect( home_url() );
@@ -97,12 +97,12 @@ require_once './wp-login.php';
 	}
 	function site_url( $url, $path, $orig_scheme, $blog_id ) {
 		if ( $path == 'wp-login.php' &&
-			( is_user_logged_in() || strpos( $_SERVER[REQUEST_URI], $this->properties['page'] ) !== false ) )
+			( is_user_logged_in()  || strpos( $_SERVER['REQUEST_URI'], $this->properties['page'] ) !== false ) )
 			$url = str_replace( 'wp-login.php', $this->properties['page'], $url );
 		return $url;
 	}
 	function wp_redirect( $location, $status ) {
-		if ( preg_match( '/\/'.str_replace( array( '-', '.' ), array( '\\-', '\\.' ), $this->properties['page'] ).'/u', $_SERVER[REQUEST_URI] ) )
+		if ( preg_match( '/\/'.str_replace( array( '-', '.' ), array( '\\-', '\\.' ), $this->properties['page'] ).'/u', $_SERVER['REQUEST_URI']) )
 			$location = str_replace( 'wp-login.php', $this->properties['page'], $location );
 		return $location;
 	}
@@ -188,7 +188,7 @@ require_once './wp-login.php';
 <?php } } ?>
 
 <div id="login-rebuilder-widget" class="metabox-holder">
-<form method="post" action="<?php echo str_replace( '%07E', '~', $_REQUEST['REQUEST_URI'] ); ?>">
+<form method="post" action="<?php echo str_replace( '%07E', '~', $_SERVER['REQUEST_URI'] ); ?>">
 <table summary="login rebuilder properties" class="form-table">
 <tr valign="top">
 <th><?php _e( 'Response to an invalid request :', LOGIN_REBUILDER_DOMAIN ); ?></th>

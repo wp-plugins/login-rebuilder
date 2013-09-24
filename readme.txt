@@ -1,10 +1,10 @@
 === Login rebuilder ===
-Contributors: tmatsuur
+Contributors: takenori matsuura
 Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
 Requires at least: 3.0.0
-Tested up to: 3.6.1
-Stable tag: 1.0.2
+Tested up to: 3.6.0
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -71,6 +71,11 @@ Please delete the new login page file, this plug-in returns during preparation.
 2. This plug-in settings.
 
 == Changelog ==
+
+= 1.0.3 =
+* Bug fix:
+ 1.A few array key name was corrected. 
+ 2.The URL of properties form was corrected. 
 
 = 1.0.2 =
 * Bug fix:
