@@ -2,9 +2,9 @@
 Contributors: tmatsuur
 Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
-Requires at least: 3.0.0
-Tested up to: 3.6.0
-Stable tag: 1.0.3
+Requires at least: 3.2.0
+Tested up to: 3.7.1
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -42,10 +42,11 @@ Please contact to me.
 == Installation ==
 
 1. A plug-in installation screen is displayed on the WordPress admin panel.
-1. It installs it in `wp-content/plugins`.
-1. The plug-in is made effective.
-1. You will find `Login rebuilder` submenu in `Settings` menu.
-1. Please enter `New login file`, and choose `working`. Next, please click `Save Changes` button.
+2. It installs it in `wp-content/plugins`.
+3. The plug-in is made effective.
+4. You will find `Login rebuilder` submenu in `Settings` menu.
+5. Please enter `New login file`, and choose `working`. Next, please click `Save Changes` button.
+6. `Login file for subscriber` is optional. It becomes a page to which only subscribers can log in there. 
 
 == Frequently Asked Questions ==
 
@@ -71,6 +72,9 @@ Please delete the new login page file, this plug-in returns during preparation.
 2. This plug-in settings.
 
 == Changelog ==
+
+= 1.1.0 =
+* Login page for subscriber is available.
 
 = 1.0.3 =
 * Bug fix:

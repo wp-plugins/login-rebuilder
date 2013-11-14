@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.0.3
+Version: 1.1.0
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.0.3' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.1.0' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 
 $plugin_login_rebuilder = new login_rebuilder();
@@ -41,6 +41,7 @@ require_once './wp-login.php';
 		$this->properties = get_site_option( LOGIN_REBUILDER_PROPERTIES,
 			array( 'status'=>self::LOGIN_REBUILDER_STATUS_IN_PREPARATION,
 					'page'=>$candidate[ array_rand( $candidate ) ],
+					'page_subscriber'=>'',
 					'keyword'=>$this->generate_keyword(),
 					'response'=>self::LOGIN_REBUILDER_RESPONSE_403 ) );
 		if ( is_multisite() )
@@ -56,6 +57,10 @@ require_once './wp-login.php';
 			add_action( 'login_init', array( &$this, 'login_init' ) );
 			add_filter( 'site_url', array( &$this, 'site_url' ), 10, 4 );
 			add_filter( 'wp_redirect', array( &$this, 'wp_redirect' ), 10, 2 );
+			if ( $this->properties['page_subscriber'] != '' &&
+				strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false &&
+				$this->is_valid_new_login_file( $this->properties['page_subscriber'] ) )
+				add_filter( 'authenticate', array( &$this, 'subscriber_authenticate' ), 99, 3 );
 		}
 	}
 	private function generate_keyword() {
@@ -79,7 +84,7 @@ require_once './wp-login.php';
 
 	function login_init() {
 		if ( preg_match( '/\/wp\-login\.php/u', $_SERVER['REQUEST_URI'] ) ||
-			( strpos( $_SERVER['REQUEST_URI'], $this->properties['page'] ) !== false && ( !defined( 'LOGIN_REBUILDER_SIGNATURE' ) || $this->properties['keyword'] != LOGIN_REBUILDER_SIGNATURE ) ) ) {
+			!( ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page'] ) !== false || strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false ) && defined( 'LOGIN_REBUILDER_SIGNATURE' ) && $this->properties['keyword'] == LOGIN_REBUILDER_SIGNATURE ) ) {
 			switch ( $this->properties['response'] ) {
 				case self::LOGIN_REBUILDER_RESPONSE_GO_HOME:
 					wp_redirect( home_url() );
@@ -96,17 +101,46 @@ require_once './wp-login.php';
 		}
 	}
 	function site_url( $url, $path, $orig_scheme, $blog_id ) {
+		$my_login_page = $this->properties['page'];
+		$user = wp_get_current_user();
+		if ( $this->properties['page_subscriber'] != '' && ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
+			$my_login_page = $this->properties['page_subscriber'];
+
 		if ( $path == 'wp-login.php' &&
-			( is_user_logged_in()  || strpos( $_SERVER['REQUEST_URI'], $this->properties['page'] ) !== false ) )
-			$url = str_replace( 'wp-login.php', $this->properties['page'], $url );
+			( is_user_logged_in()  || strpos( $_SERVER['REQUEST_URI'], '/'.$my_login_page ) !== false ) )
+			$url = str_replace( 'wp-login.php', $my_login_page, $url );
 		return $url;
 	}
 	function wp_redirect( $location, $status ) {
-		if ( preg_match( '/\/'.str_replace( array( '-', '.' ), array( '\\-', '\\.' ), $this->properties['page'] ).'/u', $_SERVER['REQUEST_URI']) )
-			$location = str_replace( 'wp-login.php', $this->properties['page'], $location );
+		$my_login_page = $this->properties['page'];
+		$user = wp_get_current_user();
+		if ( $this->properties['page_subscriber'] != '' && ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
+			$my_login_page = $this->properties['page_subscriber'];
+
+		if ( preg_match( '/\/'.str_replace( array( '-', '.' ), array( '\\-', '\\.' ), $my_login_page ).'/u', $_SERVER['REQUEST_URI']) )
+			$location = str_replace( 'wp-login.php', $my_login_page, $location );
+		else if ( preg_match( '/reauth\=1$/u', $location ) ) {
+			if ( is_user_admin() )
+				$scheme = 'logged_in';
+			else
+				$scheme = apply_filters( 'auth_redirect_scheme', '' );
+			if ( $cookie_elements = wp_parse_auth_cookie( '',  $scheme ) ) {
+				extract( $cookie_elements, EXTR_OVERWRITE );
+				$user = get_user_by( 'login', $username );
+				if ( $user ) // timeout
+					$location = str_replace( 'wp-login.php?', $my_login_page.'?', $location );
+			}
+		}
 		return $location;
 	}
-	
+	function subscriber_authenticate( $user, $username, $password ) {
+		if ( !is_a( $user, 'WP_User' ) )
+			return $user;
+
+		if ( !( isset( $user->caps['subscriber'] ) && $user->caps['subscriber'] ) )
+			return new WP_Error( 'authentication_failed', __( '<strong>ERROR</strong>: Invalid  username.', LOGIN_REBUILDER_DOMAIN ) );
+		return $user;
+	}
 	function plugin_row_meta( $links, $file ) {
 		if ( $file == plugin_basename( dirname( __FILE__ ) ).'/'.basename( __FILE__ ) ) {
 			$links[] = '<a href="options-general.php?page='.self::LOGIN_REBUILDER_PROPERTIES_NAME.'">'.__( 'Settings' ).'</a>';
@@ -125,31 +159,45 @@ require_once './wp-login.php';
 					'wp-pass.php', 'wp-rdf.php', 'wp-register.php', 'wp-rss.php', 'wp-rss2.php',
 					'wp-settings.php', 'wp-signup.php', 'wp-trackback.php', 'xmlrpc.php' ) );
 	}
-	private function is_valid_new_login_file() {
+	private function is_valid_new_login_file( $filename = null ) {
+		if ( is_null( $filename ) )
+			$filename = $this->properties['page'];
 		return 
 			preg_replace( "/\r\n|\r|\n/", "\r", str_replace( '%sig%', $this->properties['keyword'], $this->content ) ) == 
-			preg_replace( "/\r\n|\r|\n/", "\r", trim( file_get_contents( ABSPATH.$this->properties['page'] ) ) );
+			preg_replace( "/\r\n|\r|\n/", "\r", trim( file_get_contents( ABSPATH.$filename ) ) );
 	}
 
 	function properties() {
 		$message = '';
 		if ( isset( $_POST['properties'] ) ) {
 			$_POST['properties']['page'] = trim( $_POST['properties']['page'] );
+			$_POST['properties']['page_subscriber'] = trim( $_POST['properties']['page_subscriber'] );
 			if ( $this->is_reserved_login_file( $_POST['properties']['page'] ) ) {
-				$message = __( 'New login file is system file. Please change a file name.' );
+				$message = __( 'New login file is system file. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
+				$this->properties = $_POST['properties'];
+			} else if ( $_POST['properties']['page_subscriber'] != '' && ( $_POST['properties']['page_subscriber'] == $_POST['properties']['page'] || $this->is_reserved_login_file( $_POST['properties']['page_subscriber'] ) ) ) {
+				$message = __( 'Login file for subscriber is invalid. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
 				$this->properties = $_POST['properties'];
 			} else {
 				$message = __( 'Options saved.' ).' ';
 				if ( $this->properties['keyword'] != $_POST['properties']['keyword'] ||
-					$this->properties['page'] != $_POST['properties']['page'] ) {
+					$this->properties['page'] != $_POST['properties']['page'] ||
+					$this->properties['page_subscriber'] != $_POST['properties']['page_subscriber'] ) {
 					$this->properties['keyword'] = $_POST['properties']['keyword'];
 					$this->properties['page'] = $_POST['properties']['page'];
+					$this->properties['page_subscriber'] = $_POST['properties']['page_subscriber'];
 					$result = $this->try_save( array_merge( $_POST['properties'], array( 'mode'=>1 ) ) );
 					if ( $result['update'] ) {
 						$this->properties['status'] = intval( $_POST['properties']['status'] );
 					} else if ( !@file_exists( ABSPATH.$this->properties['page'] ) || !$this->is_valid_new_login_file() ) {
 						$message .= __( "However, failed to write a new login file to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
 						$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+					}
+					$subscriber = $_POST['properties'];
+					$subscriber['page'] = $subscriber['page_subscriber'];
+					$result = $this->try_save( array_merge( $subscriber, array( 'mode'=>1 ) ) );
+					if ( !$result['update'] && ( !@file_exists( ABSPATH.$this->properties['page_subscriber'] ) || !$this->is_valid_new_login_file( $this->properties['page_subscriber'] ) ) ) {
+						$message .= __( "However, failed to write a login file for subscriber to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
 					}
 				} else {
 					$this->properties['status'] = intval( $_POST['properties']['status'] );
@@ -214,6 +262,11 @@ require_once './wp-login.php';
 </tr>
 
 <tr valign="top">
+<th><label for="properties_page"><?php _e( 'Login file for subscriber:', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
+<td><input type="text" name="properties[page_subscriber]" id="properties_page_subscriber" value="<?php _e( $this->properties['page_subscriber'] ); ?>" class="regular-text code" />&nbsp;<span id="writable_subscriber">&nbsp;</span></td>
+</tr>
+
+<tr valign="top">
 <th><?php _e( 'Status :', LOGIN_REBUILDER_DOMAIN ); ?></th>
 <td>
 <input type="radio" name="properties[status]" id="properties_status_0" value="<?php _e( self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?>" <?php checked( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?> /><label for="properties_status_0">&nbsp;<span><?php _e( 'in preparation', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
@@ -231,28 +284,33 @@ require_once './wp-login.php';
 </div>
 </div>
 <script type="text/javascript">
-jQuery( 'a' ).each( function () {
-	jQuery( this ).attr( 'href', jQuery( this ).attr( 'href' ).replace( '<?php echo $logout_from; ?>', '<?php echo $logout_to; ?>' ) );
-} );
-jQuery( '#properties_keyword' ).blur( function () {
-	jQuery( '#login_page_content' ).val( jQuery( '#content_template' ).val().replace( '%sig%', jQuery( this ).val() ) );
-} );
-jQuery( '#properties_page' ).blur( function () {
-	var url = jQuery.trim( jQuery( this ).val() );
-	if ( url != '' ) {
-		jQuery.post( '<?php echo admin_url( 'admin-ajax.php' ); ?>',
-			{ action: 'login_rebuilder_try_save', mode: 0, page: url },
-			function( response ) {
-				if ( response.data.writable ) {
-					jQuery( '#writable' ).text( '[<?php _e( 'Writing is possible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'blue' );
-				} else {
-					jQuery( '#writable' ).text( '[<?php _e( 'Writing is impossible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'orange' );
-				}
-			}, 'json' );
-	}
-} );
-jQuery( '#properties_keyword' ).blur();
-jQuery( '#properties_page' ).blur();
+( function($) {
+	$( 'a' ).each( function () {
+		$( this ).attr( 'href', jQuery( this ).attr( 'href' ).replace( '<?php echo $logout_from; ?>', '<?php echo $logout_to; ?>' ) );
+	} );
+	$( '#properties_keyword' ).blur( function () {
+		$( '#login_page_content' ).val( $( '#content_template' ).val().replace( '%sig%', $( this ).val() ) );
+	} );
+	$( '#properties_page, #properties_page_subscriber' ).blur( function () {
+		var page_elm = $( this );
+		var url = $.trim( $( this ).val() );
+		if ( url != '' ) {
+			$.post( '<?php echo admin_url( 'admin-ajax.php' ); ?>',
+				{ action: 'login_rebuilder_try_save', mode: 0, page: url },
+				function( response ) {
+					console.log( response.data );
+					if ( response.data.writable ) {
+						page_elm.next( 'span' ).text( '[<?php _e( 'Writing is possible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'blue' );
+					} else {
+						page_elm.next( 'span' ).text( '[<?php _e( 'Writing is impossible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'orange' );
+					}
+				}, 'json' );
+		}
+	} );
+	$( '#properties_keyword' ).blur();
+	$( '#properties_page' ).blur();
+	$( '#properties_page_subscriber' ).blur();
+} )( jQuery );
 </script>
 <?php
 	}
