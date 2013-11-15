@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.1.0
+Version: 1.1.1
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.1.0' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.1.1' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 
 $plugin_login_rebuilder = new login_rebuilder();
@@ -102,7 +102,10 @@ require_once './wp-login.php';
 	}
 	function site_url( $url, $path, $orig_scheme, $blog_id ) {
 		$my_login_page = $this->properties['page'];
-		$user = wp_get_current_user();
+		if ( function_exists( 'wp_get_current_user' ) )
+			$user = wp_get_current_user();
+		else
+			$user = (object)array( 'data'=>null );
 		if ( $this->properties['page_subscriber'] != '' && ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
 			$my_login_page = $this->properties['page_subscriber'];
 
@@ -113,7 +116,10 @@ require_once './wp-login.php';
 	}
 	function wp_redirect( $location, $status ) {
 		$my_login_page = $this->properties['page'];
-		$user = wp_get_current_user();
+		if ( function_exists( 'wp_get_current_user' ) )
+			$user = wp_get_current_user();
+		else
+			$user = (object)array( 'data'=>null );
 		if ( $this->properties['page_subscriber'] != '' && ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
 			$my_login_page = $this->properties['page_subscriber'];
 
