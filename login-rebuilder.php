@@ -4,12 +4,12 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.1.1
+Version: 1.1.2
 Author URI: http://12net.jp/
 */
 
 /*
- Copyright (C) 2013 tmatsuur (Email: takenori dot matsuura at 12net dot jp)
+ Copyright (C) 2013-2014 tmatsuur (Email: takenori dot matsuura at 12net dot jp)
 This program is licensed under the GNU GPL Version 2.
 */
 
@@ -304,7 +304,6 @@ require_once './wp-login.php';
 			$.post( '<?php echo admin_url( 'admin-ajax.php' ); ?>',
 				{ action: 'login_rebuilder_try_save', mode: 0, page: url },
 				function( response ) {
-					console.log( response.data );
 					if ( response.data.writable ) {
 						page_elm.next( 'span' ).text( '[<?php _e( 'Writing is possible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'blue' );
 					} else {
