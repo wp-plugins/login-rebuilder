@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.1.2
+Version: 1.1.3
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.1.1' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.1.3' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 
 $plugin_login_rebuilder = new login_rebuilder();
@@ -83,6 +83,7 @@ require_once './wp-login.php';
 	}
 
 	function login_init() {
+		if ( $_GET['action'] == 'postpass' ) return;
 		if ( preg_match( '/\/wp\-login\.php/u', $_SERVER['REQUEST_URI'] ) ||
 			!( ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page'] ) !== false || strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false ) && defined( 'LOGIN_REBUILDER_SIGNATURE' ) && $this->properties['keyword'] == LOGIN_REBUILDER_SIGNATURE ) ) {
 			switch ( $this->properties['response'] ) {
