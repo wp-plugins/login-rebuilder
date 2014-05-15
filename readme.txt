@@ -3,8 +3,8 @@ Contributors: tmatsuur
 Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
 Requires at least: 3.2.0
-Tested up to: 3.8.1
-Stable tag: 1.1.3
+Tested up to: 3.9.1
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -72,6 +72,10 @@ Please delete the new login page file, this plug-in returns during preparation.
 2. This plug-in settings.
 
 == Changelog ==
+
+= 1.2.0 =
+* Bug fix [important]: It was coped with about CSRF.
+ * New: Added logging.
 
 = 1.1.3 =
 * Bug fix:
