@@ -229,6 +229,7 @@ require_once './wp-login.php';
 		if ( !current_user_can( 'manage_options' ) )
 			return;	// Except an administrator
 
+		$show_reload = false;
 		$message = '';
 		if ( isset( $_POST['properties'] ) ) {
 			check_admin_referer( self::LOGIN_REBUILDER_PROPERTIES_NAME );
@@ -292,6 +293,7 @@ require_once './wp-login.php';
 				}
 			} else {
 				$message .= __( "Expiration date of this page has expired.", LOGIN_REBUILDER_DOMAIN );
+				$show_reload = true;
 			}
 		}
 		$logging = get_option( LOGIN_REBUILDER_LOGGING_NAME, array( 'invalid'=>array(), 'login'=>array() ) );
@@ -308,7 +310,9 @@ require_once './wp-login.php';
 
 <div id="login-rebuilder-widget" class="metabox-holder">
 <p><?php _e( 'Notice: This page is valid for 30 minutes.', LOGIN_REBUILDER_DOMAIN ); ?></p>
-
+<?php if ( $show_reload ) { ?>
+<p><a href="<?php echo str_replace( '%07E', '~', $_SERVER['REQUEST_URI'] ); ?>" class="button"><?php _e( 'Reload now.', LOGIN_REBUILDER_DOMAIN ); ?></a></p>
+<?php } else { ?>
 <form method="post" action="<?php echo str_replace( '%07E', '~', $_SERVER['REQUEST_URI'] ); ?>">
 <table summary="login rebuilder properties" class="form-table">
 <tr valign="top">
@@ -397,7 +401,7 @@ foreach ( $logging['login'] as $log ) {
 </tbody>
 </table>
 </div>
-<?php } ?>
+<?php } } ?>
 </div>
 </div>
 <script type="text/javascript">
