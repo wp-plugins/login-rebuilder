@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.2.0
+Version: 1.2.1
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.2.0' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.2.1' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 
@@ -28,6 +28,7 @@ define( 'LOGIN_REBUILDER_SIGNATURE', '%sig%' );
 require_once './wp-login.php';
 ?>";
 	const LOGIN_REBUILDER_PROPERTIES_NAME = 'login-rebuilder-properties';
+	const LOGIN_REBUILDER_NONCE_NAME = 'login-rebuilder-nonce';
 	const LOGIN_REBUILDER_RESPONSE_403 = 1;
 	const LOGIN_REBUILDER_RESPONSE_404 = 2;
 	const LOGIN_REBUILDER_RESPONSE_GO_HOME = 3;
@@ -83,6 +84,7 @@ require_once './wp-login.php';
 		}
 	}
 	function deactivation() {
+		$this->delete_private_nonce();
 		delete_option( LOGIN_REBUILDER_DB_VERSION_NAME );
 		delete_option( LOGIN_REBUILDER_LOGGING_NAME );
 
@@ -227,66 +229,69 @@ require_once './wp-login.php';
 		if ( !current_user_can( 'manage_options' ) )
 			return;	// Except an administrator
 
-		$nonce = wp_create_nonce( self::LOGIN_REBUILDER_PROPERTIES_NAME.'@'.$wp_version.'@'.LOGIN_REBUILDER_DB_VERSION );
 		$message = '';
-		if ( isset( $_POST['properties_'.$nonce] ) ) {
+		if ( isset( $_POST['properties'] ) ) {
 			check_admin_referer( self::LOGIN_REBUILDER_PROPERTIES_NAME );
 
-			$_POST['properties'] = $_POST['properties_'.$nonce];
-			$_POST['properties']['page'] = trim( $_POST['properties']['page'] );
-			$_POST['properties']['page_subscriber'] = trim( $_POST['properties']['page_subscriber'] );
-			if ( $this->is_reserved_login_file( $_POST['properties']['page'] ) ) {
-				$message = __( 'New login file is system file. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
-				$this->properties = $_POST['properties'];
-			} else if ( $_POST['properties']['page_subscriber'] != '' && ( $_POST['properties']['page_subscriber'] == $_POST['properties']['page'] || $this->is_reserved_login_file( $_POST['properties']['page_subscriber'] ) ) ) {
-				$message = __( 'Login file for subscriber is invalid. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
-				$this->properties = $_POST['properties'];
-			} else {
-				if ( $this->properties['keyword'] != $_POST['properties']['keyword'] ||
-					$this->properties['logging'] != $_POST['properties']['logging'] ||
-					$this->properties['page'] != $_POST['properties']['page'] ||
-					$this->properties['page_subscriber'] != $_POST['properties']['page_subscriber'] ) {
-					$this->properties['keyword'] = $_POST['properties']['keyword'];
-					$this->properties['logging'] = $_POST['properties']['logging'];
-					$this->properties['page'] = $_POST['properties']['page'];
-					$this->properties['page_subscriber'] = $_POST['properties']['page_subscriber'];
-					$result = $this->try_save( array_merge( $_POST['properties'], array( 'mode'=>1 ) ) );
-					if ( $result['update'] ) {
-						$this->properties['status'] = intval( $_POST['properties']['status'] );
-					} else if ( !empty( $this->properties['page'] ) && ( !@file_exists( ABSPATH.$this->properties['page'] ) || !$this->is_valid_new_login_file() ) ) {
-						$message .= __( "However, failed to write a new login file to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
-						$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
-					}
-					$subscriber = $_POST['properties'];
-					$subscriber['page'] = $subscriber['page_subscriber'];
-					$result = $this->try_save( array_merge( $subscriber, array( 'mode'=>1 ) ) );
-					$message = __( 'Options saved.', LOGIN_REBUILDER_DOMAIN ).' ';
-					if ( !$result['update'] && !empty( $this->properties['page_subscriber'] ) && ( !@file_exists( ABSPATH.$this->properties['page_subscriber'] ) || !$this->is_valid_new_login_file( $this->properties['page_subscriber'] ) ) ) {
-						$message .= __( "However, failed to write a login file for subscriber to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
-					}
+			if ( $this->verify_private_nonce() ) {
+				$_POST['properties']['page'] = trim( $_POST['properties']['page'] );
+				$_POST['properties']['page_subscriber'] = trim( $_POST['properties']['page_subscriber'] );
+				if ( $this->is_reserved_login_file( $_POST['properties']['page'] ) ) {
+					$message = __( 'New login file is system file. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
+					$this->properties = $_POST['properties'];
+				} else if ( $_POST['properties']['page_subscriber'] != '' && ( $_POST['properties']['page_subscriber'] == $_POST['properties']['page'] || $this->is_reserved_login_file( $_POST['properties']['page_subscriber'] ) ) ) {
+					$message = __( 'Login file for subscriber is invalid. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
+					$this->properties = $_POST['properties'];
 				} else {
-					$this->properties['status'] = intval( $_POST['properties']['status'] );
-					if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
-						if ( !@file_exists( ABSPATH.$this->properties['page'] ) ) {
-							$message .= __( "However, a new login file was not found.", LOGIN_REBUILDER_DOMAIN );
-							$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
-						} else if ( !$this->is_valid_new_login_file() ) {
-							$message .= __( "However, the contents of a new login file are not in agreement.", LOGIN_REBUILDER_DOMAIN );
+					if ( $this->properties['keyword'] != $_POST['properties']['keyword'] ||
+						$this->properties['logging'] != $_POST['properties']['logging'] ||
+						$this->properties['page'] != $_POST['properties']['page'] ||
+						$this->properties['page_subscriber'] != $_POST['properties']['page_subscriber'] ) {
+						$this->properties['keyword'] = $_POST['properties']['keyword'];
+						$this->properties['logging'] = $_POST['properties']['logging'];
+						$this->properties['page'] = $_POST['properties']['page'];
+						$this->properties['page_subscriber'] = $_POST['properties']['page_subscriber'];
+						$result = $this->try_save( array_merge( $_POST['properties'], array( 'mode'=>1 ) ) );
+						if ( $result['update'] ) {
+							$this->properties['status'] = intval( $_POST['properties']['status'] );
+						} else if ( !empty( $this->properties['page'] ) && ( !@file_exists( ABSPATH.$this->properties['page'] ) || !$this->is_valid_new_login_file() ) ) {
+							$message .= __( "However, failed to write a new login file to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
 							$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
 						}
+						$subscriber = $_POST['properties'];
+						$subscriber['page'] = $subscriber['page_subscriber'];
+						$result = $this->try_save( array_merge( $subscriber, array( 'mode'=>1 ) ) );
+						$message = __( 'Options saved.', LOGIN_REBUILDER_DOMAIN ).' ';
+						if ( !$result['update'] && !empty( $this->properties['page_subscriber'] ) && ( !@file_exists( ABSPATH.$this->properties['page_subscriber'] ) || !$this->is_valid_new_login_file( $this->properties['page_subscriber'] ) ) ) {
+							$message .= __( "However, failed to write a login file for subscriber to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
+						}
+					} else if ( $this->properties['status'] != intval( $_POST['properties']['status'] ) ) {
+						$message = __( 'Options saved.', LOGIN_REBUILDER_DOMAIN ).' ';
+						$this->properties['status'] = intval( $_POST['properties']['status'] );
+						if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
+							if ( !@file_exists( ABSPATH.$this->properties['page'] ) ) {
+								$message .= __( "However, a new login file was not found.", LOGIN_REBUILDER_DOMAIN );
+								$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+							} else if ( !$this->is_valid_new_login_file() ) {
+								$message .= __( "However, the contents of a new login file are not in agreement.", LOGIN_REBUILDER_DOMAIN );
+								$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+							}
+						}
+					}
+					$this->properties['response'] = intval( $_POST['properties']['response'] );
+					update_site_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
+					if ( is_multisite() )
+						update_option( LOGIN_REBUILDER_PROPERTIES, $this->properties['status'] );
+					if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ) {
+						$logout_from = site_url( $this->properties['page'] );
+						$logout_to = site_url( 'wp-login.php' );
+					} else {
+						$logout_from = site_url( 'wp-login.php' );
+						$logout_to = site_url( $this->properties['page'] );
 					}
 				}
-				$this->properties['response'] = intval( $_POST['properties']['response'] );
-				update_site_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
-				if ( is_multisite() )
-					update_option( LOGIN_REBUILDER_PROPERTIES, $this->properties['status'] );
-				if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ) {
-					$logout_from = site_url( $this->properties['page'] );
-					$logout_to = site_url( 'wp-login.php' );
-				} else {
-					$logout_from = site_url( 'wp-login.php' );
-					$logout_to = site_url( $this->properties['page'] );
-				}
+			} else {
+				$message .= __( "Expiration date of this page has expired.", LOGIN_REBUILDER_DOMAIN );
 			}
 		}
 		$logging = get_option( LOGIN_REBUILDER_LOGGING_NAME, array( 'invalid'=>array(), 'login'=>array() ) );
@@ -302,51 +307,53 @@ require_once './wp-login.php';
 <?php } } ?>
 
 <div id="login-rebuilder-widget" class="metabox-holder">
+<p><?php _e( 'Notice: This page is valid for 30 minutes.', LOGIN_REBUILDER_DOMAIN ); ?></p>
+
 <form method="post" action="<?php echo str_replace( '%07E', '~', $_SERVER['REQUEST_URI'] ); ?>">
 <table summary="login rebuilder properties" class="form-table">
 <tr valign="top">
 <th><?php _e( 'Response to an invalid request :', LOGIN_REBUILDER_DOMAIN ); ?></th>
 <td>
-<input type="radio" name="properties_<?php echo $nonce; ?>[response]" id="properties_response_1" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_403 ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_403 ); ?> /><label for="properties_response_1">&nbsp;<span><?php _e( '403 status', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
-<input type="radio" name="properties_<?php echo $nonce; ?>[response]" id="properties_response_2" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_404 ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_404 ); ?> /><label for="properties_response_2">&nbsp;<span><?php _e( '404 status', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
-<input type="radio" name="properties_<?php echo $nonce; ?>[response]" id="properties_response_3" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_GO_HOME ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_GO_HOME ); ?> /><label for="properties_response_3">&nbsp;<span><?php _e( 'redirect to a site url', LOGIN_REBUILDER_DOMAIN ); echo ' ( '.home_url().' )'; ?></span></label><br />
+<input type="radio" name="properties[response]" id="properties_response_1" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_403 ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_403 ); ?> /><label for="properties_response_1">&nbsp;<span><?php _e( '403 status', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[response]" id="properties_response_2" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_404 ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_404 ); ?> /><label for="properties_response_2">&nbsp;<span><?php _e( '404 status', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[response]" id="properties_response_3" value="<?php _e( self::LOGIN_REBUILDER_RESPONSE_GO_HOME ); ?>" <?php checked( $this->properties['response'] == self::LOGIN_REBUILDER_RESPONSE_GO_HOME ); ?> /><label for="properties_response_3">&nbsp;<span><?php _e( 'redirect to a site url', LOGIN_REBUILDER_DOMAIN ); echo ' ( '.home_url().' )'; ?></span></label><br />
 </td>
 </tr>
 
 <tr valign="top">
 <th><label for="properties_keyword"><?php _e( 'Login file keyword :', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
-<td><input type="text" name="properties_<?php echo $nonce; ?>[keyword]" id="properties_keyword" value="<?php _e( $this->properties['keyword'] ); ?>" class="regular-text code" /></td>
+<td><input type="text" name="properties[keyword]" id="properties_keyword" value="<?php _e( $this->properties['keyword'] ); ?>" class="regular-text code" /></td>
 </tr>
 
 <tr valign="top">
 <th rowspan="2"><label for="properties_page"><?php _e( 'New login file :', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
-<td><input type="text" name="properties_<?php echo $nonce; ?>[page]" id="properties_page" value="<?php _e( $this->properties['page'] ); ?>" class="regular-text code" />&nbsp;<span id="writable">&nbsp;</span></td>
+<td><input type="text" name="properties[page]" id="properties_page" value="<?php _e( $this->properties['page'] ); ?>" class="regular-text code" />&nbsp;<span id="writable">&nbsp;</span></td>
 </tr>
 
 <tr valign="top">
-<td><textarea  name="properties_<?php echo $nonce; ?>[content]" id="login_page_content" rows="4" cols="60" style="font-family:monospace;" readonly="readonly"></textarea><input type="hidden" id="content_template" value="<?php echo $this->content; ?>" /></td>
+<td><textarea  name="properties[content]" id="login_page_content" rows="4" cols="60" style="font-family:monospace;" readonly="readonly"></textarea><input type="hidden" id="content_template" value="<?php echo $this->content; ?>" /></td>
 </tr>
 
 <tr valign="top">
 <th><label for="properties_page"><?php _e( 'Login file for subscriber:', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
-<td><input type="text" name="properties_<?php echo $nonce; ?>[page_subscriber]" id="properties_page_subscriber" value="<?php _e( $this->properties['page_subscriber'] ); ?>" class="regular-text code" />&nbsp;<span id="writable_subscriber">&nbsp;</span></td>
+<td><input type="text" name="properties[page_subscriber]" id="properties_page_subscriber" value="<?php _e( $this->properties['page_subscriber'] ); ?>" class="regular-text code" />&nbsp;<span id="writable_subscriber">&nbsp;</span></td>
 </tr>
 
 <tr valign="top">
 <th><?php _e( 'Status :', LOGIN_REBUILDER_DOMAIN ); ?></th>
 <td>
-<input type="radio" name="properties_<?php echo $nonce; ?>[status]" id="properties_status_0" value="<?php _e( self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?>" <?php checked( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?> /><label for="properties_status_0">&nbsp;<span><?php _e( 'in preparation', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
-<input type="radio" name="properties_<?php echo $nonce; ?>[status]" id="properties_status_1" value="<?php _e( self::LOGIN_REBUILDER_STATUS_WORKING ); ?>" <?php checked( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ); ?> /><label for="properties_status_1">&nbsp;<span><?php _e( 'working', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[status]" id="properties_status_0" value="<?php _e( self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?>" <?php checked( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ); ?> /><label for="properties_status_0">&nbsp;<span><?php _e( 'in preparation', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[status]" id="properties_status_1" value="<?php _e( self::LOGIN_REBUILDER_STATUS_WORKING ); ?>" <?php checked( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ); ?> /><label for="properties_status_1">&nbsp;<span><?php _e( 'working', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
 </td>
 </tr>
 
 <tr valign="top">
 <th><?php _e( 'Logging :', LOGIN_REBUILDER_DOMAIN ); ?></th>
 <td>
-<input type="radio" name="properties_<?php echo $nonce; ?>[logging]" id="properties_logging_0" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_OFF ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_OFF ); ?> /><label for="properties_logging_0">&nbsp;<span><?php _e( 'off', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
-<input type="radio" name="properties_<?php echo $nonce; ?>[logging]" id="properties_logging_1" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_INVALID_REQUEST ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_INVALID_REQUEST ); ?> /><label for="properties_logging_1">&nbsp;<span><?php _e( 'invalid request only', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
-<input type="radio" name="properties_<?php echo $nonce; ?>[logging]" id="properties_logging_2" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_LOGIN ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN ); ?> /><label for="properties_logging_2">&nbsp;<span><?php _e( 'login only', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
-<input type="radio" name="properties_<?php echo $nonce; ?>[logging]" id="properties_logging_3" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_ALL ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL ); ?> /><label for="properties_logging_3">&nbsp;<span><?php _e( 'all', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[logging]" id="properties_logging_0" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_OFF ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_OFF ); ?> /><label for="properties_logging_0">&nbsp;<span><?php _e( 'off', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[logging]" id="properties_logging_1" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_INVALID_REQUEST ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_INVALID_REQUEST ); ?> /><label for="properties_logging_1">&nbsp;<span><?php _e( 'invalid request only', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[logging]" id="properties_logging_2" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_LOGIN ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN ); ?> /><label for="properties_logging_2">&nbsp;<span><?php _e( 'login only', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
+<input type="radio" name="properties[logging]" id="properties_logging_3" value="<?php _e( self::LOGIN_REBUILDER_LOGGING_ALL ); ?>" <?php checked( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL ); ?> /><label for="properties_logging_3">&nbsp;<span><?php _e( 'all', LOGIN_REBUILDER_DOMAIN ); ?></span></label><br />
 </td>
 </tr>
 
@@ -355,7 +362,7 @@ require_once './wp-login.php';
 <input type="submit" name="submit" value="<?php esc_attr_e( 'Save Changes' ); ?>" class="button-primary" />
 <?php if ( count( $logging['invalid'] ) > 0 || count( $logging['login'] ) > 0 ) { ?>
 <input type="button" name="view-log" id="view-log" value="<?php esc_attr_e( 'View log', LOGIN_REBUILDER_DOMAIN ); ?>" class="button" />
-<?php } wp_nonce_field( self::LOGIN_REBUILDER_PROPERTIES_NAME ); ?>
+<?php } wp_nonce_field( self::LOGIN_REBUILDER_PROPERTIES_NAME ); $this->private_nonce_field(); ?>
 </td>
 </tr>
 </table>
@@ -471,6 +478,34 @@ foreach ( $logging['login'] as $log ) {
 			}
 		} else
 			return $data;
+	}
+	private function init_private_nonce() {
+		if ( get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' ) == '' )
+			add_option( self::LOGIN_REBUILDER_NONCE_NAME, array( 'nonce'=>'', 'access'=>time() ), '', 'no' );
+	}
+	private function delete_private_nonce() {
+		delete_option( self::LOGIN_REBUILDER_NONCE_NAME );
+	}
+	private function private_nonce_field( $field_name = self::LOGIN_REBUILDER_NONCE_NAME, $action = self::LOGIN_REBUILDER_NONCE_NAME ) {
+		$now = time();
+		$nonce = wp_create_nonce( $action.$now%10000 );
+		$this->init_private_nonce();
+		update_option( self::LOGIN_REBUILDER_NONCE_NAME, array( 'nonce'=>$nonce, 'access'=>$now ) );
+		$field_name = esc_attr( $field_name );
+		$nonce_field = '<input type="hidden" id="'.$field_name.'" name="'.$field_name.'" value="'.$nonce.'" />';
+		echo $nonce_field;
+	}
+	private function verify_private_nonce( $field_name = self::LOGIN_REBUILDER_NONCE_NAME, $lifetime = 1800 ) {
+		$valid = false;
+		$field_name = esc_attr( $field_name );
+		$now = time();
+		$private_nonce = get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' );
+		if ( isset( $private_nonce['nonce'] ) && isset( $private_nonce['access'] ) &&
+			isset( $_REQUEST[$field_name] ) && $_REQUEST[$field_name] == $private_nonce['nonce'] &&
+			( $now-$private_nonce['access'] ) > 0 && ( $now-$private_nonce['access'] ) <= $lifetime ) {
+			$valid = true;
+		}
+		return $valid;
 	}
 }
 ?>
