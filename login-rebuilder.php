@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.2.2
+Version: 1.2.3
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.2.1' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.2.3' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 
@@ -28,7 +28,6 @@ define( 'LOGIN_REBUILDER_SIGNATURE', '%sig%' );
 require_once './wp-login.php';
 ?>";
 	const LOGIN_REBUILDER_PROPERTIES_NAME = 'login-rebuilder-properties';
-	const LOGIN_REBUILDER_NONCE_NAME = 'login-rebuilder-nonce';
 	const LOGIN_REBUILDER_RESPONSE_403 = 1;
 	const LOGIN_REBUILDER_RESPONSE_404 = 2;
 	const LOGIN_REBUILDER_RESPONSE_GO_HOME = 3;
@@ -39,6 +38,8 @@ require_once './wp-login.php';
 	const LOGIN_REBUILDER_LOGGING_LOGIN = 2;
 	const LOGIN_REBUILDER_LOGGING_ALL = 3;
 	const LOGIN_REBUILDER_LOGGING_LIMIT = 100;
+	const LOGIN_REBUILDER_NONCE_NAME = 'login-rebuilder-nonce';
+	const LOGIN_REBUILDER_NONCE_LIFETIME = 1800;
 
 	function __construct() {
 		load_plugin_textdomain( LOGIN_REBUILDER_DOMAIN, false, plugin_basename( dirname( __FILE__ ) ).'/languages' );
@@ -291,6 +292,7 @@ require_once './wp-login.php';
 						$logout_to = site_url( $this->properties['page'] );
 					}
 				}
+				$this->clear_private_nonce();
 			} else {
 				$message .= __( "Expiration date of this page has expired.", LOGIN_REBUILDER_DOMAIN );
 				$show_reload = true;
@@ -484,29 +486,53 @@ foreach ( $logging['login'] as $log ) {
 			return $data;
 	}
 	private function init_private_nonce() {
-		if ( get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' ) == '' )
-			add_option( self::LOGIN_REBUILDER_NONCE_NAME, array( 'nonce'=>'', 'access'=>time() ), '', 'no' );
+		if ( get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' ) == '' ) {
+			add_option( self::LOGIN_REBUILDER_NONCE_NAME,
+					array( get_current_user_id()=>array( 'nonce'=>'', 'access'=>time() ) ),
+					'', 'no' );
+		}
+	}
+	private function clear_private_nonce() {
+		$private_nonce = get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' );
+		if ( isset( $private_nonce['nonce'] ) ) unset( $private_nonce['nonce'] );
+		if ( isset( $private_nonce['access'] ) ) unset( $private_nonce['access'] );
+		$user_id = get_current_user_id();
+		if ( isset( $private_nonce[$user_id] ) ) {
+			unset( $private_nonce[$user_id] );
+			update_option( self::LOGIN_REBUILDER_NONCE_NAME, $private_nonce );
+		}
 	}
 	private function delete_private_nonce() {
 		delete_option( self::LOGIN_REBUILDER_NONCE_NAME );
 	}
 	private function private_nonce_field( $field_name = self::LOGIN_REBUILDER_NONCE_NAME, $action = self::LOGIN_REBUILDER_NONCE_NAME ) {
-		$now = time();
-		$nonce = wp_create_nonce( $action.$now%10000 );
-		$this->init_private_nonce();
-		update_option( self::LOGIN_REBUILDER_NONCE_NAME, array( 'nonce'=>$nonce, 'access'=>$now ) );
 		$field_name = esc_attr( $field_name );
+		$now = time();
+		$user_id = get_current_user_id();
+
+		$this->init_private_nonce();
+		$private_nonce = get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' );
+		if ( isset( $private_nonce[$user_id]['nonce'] ) && $private_nonce[$user_id]['nonce'] != '' &&
+			( $now-$private_nonce[$user_id]['access'] ) < self::LOGIN_REBUILDER_NONCE_LIFETIME/10*9 ) {
+			// Do not update the nonce value.
+			$nonce = $private_nonce[$user_id]['nonce'];
+		} else {
+			$nonce = wp_create_nonce( $action.$now%10000 );
+			$private_nonce[$user_id] = array( 'nonce'=>$nonce, 'access'=>$now );
+			update_option( self::LOGIN_REBUILDER_NONCE_NAME, $private_nonce );
+		}
 		$nonce_field = '<input type="hidden" id="'.$field_name.'" name="'.$field_name.'" value="'.$nonce.'" />';
 		echo $nonce_field;
 	}
-	private function verify_private_nonce( $field_name = self::LOGIN_REBUILDER_NONCE_NAME, $lifetime = 1800 ) {
+	private function verify_private_nonce( $field_name = self::LOGIN_REBUILDER_NONCE_NAME, $lifetime = self::LOGIN_REBUILDER_NONCE_LIFETIME ) {
+		$user_id = get_current_user_id();
 		$valid = false;
 		$field_name = esc_attr( $field_name );
 		$now = time();
 		$private_nonce = get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' );
-		if ( isset( $private_nonce['nonce'] ) && isset( $private_nonce['access'] ) &&
-			isset( $_REQUEST[$field_name] ) && $_REQUEST[$field_name] == $private_nonce['nonce'] &&
-			( $now-$private_nonce['access'] ) > 0 && ( $now-$private_nonce['access'] ) <= $lifetime ) {
+		if ( isset( $private_nonce[$user_id]['nonce'] ) && isset( $private_nonce[$user_id]['access'] ) &&
+			isset( $_REQUEST[$field_name] ) && $_REQUEST[$field_name] == $private_nonce[$user_id]['nonce'] &&
+			( $now-$private_nonce[$user_id]['access'] ) > 0 && ( $now-$private_nonce[$user_id]['access'] ) <= $lifetime ) {
 			$valid = true;
 		}
 		return $valid;
