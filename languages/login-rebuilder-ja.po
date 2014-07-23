@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Login rebuilder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2014-06-02 20:12+0900\n"
-"PO-Revision-Date: 2014-06-02 20:12+0900\n"
+"POT-Creation-Date: 2014-07-20 17:03+0900\n"
+"PO-Revision-Date: 2014-07-20 17:05+0900\n"
 "Last-Translator: takenori matsuura <takenori.matsuura@gmail.com>\n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -16,33 +16,48 @@ msgstr ""
 "X-Generator: Poedit 1.5.4\n"
 "X-Poedit-SearchPath-0: wp-content\\plugins\\login-rebuilder\n"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:198
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:257
 msgid "<strong>ERROR</strong>: Invalid  username."
 msgstr "<strong>エラー</strong>: 無効なユーザー名です。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:203
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:303
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:262
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:396
 msgid "Settings"
 msgstr ""
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:208
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:303
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:268
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:396
 msgid "Login rebuilder"
 msgstr "ログインページ"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:241
-msgid "New login file is system file. Please change a file name."
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:285
+msgid "New login file is system file. Please change a path name."
 msgstr ""
-"指定されたログインファイル名は予約されています。ファイル名を変更してくださ"
+"指定されたログインファイル名は予約されています。パス名を変更してください。"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:288
+msgid ""
+"The case of the sub-site, new login file is invalid. Please change a path "
+"name."
+msgstr ""
+"サブサイトでは指定されたログインファイル名は無効です。パス名を変更してくださ"
 "い。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:244
-msgid "Login file for subscriber is invalid. Please change a file name."
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:291
+msgid "Login file for subscriber is invalid. Please change a path name."
 msgstr ""
-"指定された購読者専用ログインファイル名は予約されています。ファイル名を変更し"
-"てください。"
+"指定された購読者専用ログインファイル名は予約されています。パス名を変更してく"
+"ださい。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:259
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:294
+msgid ""
+"The case of the sub-site, login file for subscriber is invalid. Please "
+"change a path name."
+msgstr ""
+"サブサイトでは指定された購読者専用ログインファイル名は無効です。パス名を変更"
+"してください。"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:344
 msgid ""
 "However, failed to write a new login file to disk.\n"
 "Please change into the enabled writing of a disk or upload manually."
@@ -50,12 +65,12 @@ msgstr ""
 "ただし、ログインファイルの書き込みに失敗しました。\n"
 "ディスクを書き込み可能に変更するか、手動でアップロードしてください。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:265
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:270
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:351
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:356
 msgid "Options saved."
 msgstr "設定を保存しました。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:267
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:353
 msgid ""
 "However, failed to write a login file for subscriber to disk.\n"
 "Please change into the enabled writing of a disk or upload manually."
@@ -63,106 +78,121 @@ msgstr ""
 "ただし、購読者専用ログインファイルの書き込みに失敗しました。\n"
 "ディスクを書き込み可能に変更するか、手動でアップロードしてください。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:274
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:362
 msgid "However, a new login file was not found."
 msgstr "ただし、新しいログインファイルが見つかりませんでした。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:277
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:366
 msgid "However, the contents of a new login file are not in agreement."
 msgstr "ただし、ログインファイルの内容がおかしい可能性があります。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:295
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:388
 msgid "Expiration date of this page has expired."
 msgstr "ページの有効期間が切れています。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:312
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:405
 msgid "Notice: This page is valid for 30 minutes."
 msgstr "お知らせ: このページの有効期間は30分です。"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:314
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:407
 msgid "Reload now."
 msgstr "今すぐリロード"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:319
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:412
 msgid "Response to an invalid request :"
 msgstr "無効なリクエスト時の応答 : "
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:321
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:414
 msgid "403 status"
 msgstr "403ステータス"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:322
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:415
 msgid "404 status"
 msgstr "404ステータス"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:323
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:416
 msgid "redirect to a site url"
 msgstr "サイトトップへリダイレクト"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:328
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:421
 msgid "Login file keyword :"
 msgstr "ログインファイルのキーワード :"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:333
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:426
 msgid "New login file :"
 msgstr "新しいログインファイル :"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:342
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:434
 msgid "Login file for subscriber:"
 msgstr "購読者専用ログインファイル :"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:347
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:443
 msgid "Status :"
 msgstr "ステータス :"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:349
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:445
 msgid "in preparation"
 msgstr "準備中"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:350
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:446
 msgid "working"
 msgstr "稼働中"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:355
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:451
 msgid "Logging :"
 msgstr "ログ保存 :"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:357
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:453
 msgid "off"
 msgstr "しない"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:358
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:454
 msgid "invalid request only"
 msgstr "無効なリクエスト時のみ "
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:359
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:455
 msgid "login only"
 msgstr "ログイン時のみ"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:360
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:456
 msgid "all"
 msgstr "すべて"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:366
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:462
 msgid "Save Changes"
 msgstr ""
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:368
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:464
 msgid "View log"
 msgstr "ログを表示"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:384
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:480
 msgid "Log of invalid request"
 msgstr "無効なリクエスト時のログ"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:392
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:488
 msgid "Log of login"
 msgstr "ログインのログ"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:423
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:524
+msgid ""
+"The case of the sub-site, you can not contain '/' in the path name. Please "
+"change a path name."
+msgstr ""
+"サブサイトでは、'/'を含んだパス名を指定できません。パス名を変更してください。"
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:542
+msgid "File exists, "
+msgstr "ファイルあり, "
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:544
+msgid "File not found, "
+msgstr "ファイルなし, "
+
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:546
 msgid "Writing is possible"
 msgstr "書き込み可能"
 
-#: wp-content\plugins\login-rebuilder/login-rebuilder.php:425
+#: wp-content\plugins\login-rebuilder/login-rebuilder.php:549
 msgid "Writing is impossible"
 msgstr "書き込み不可"

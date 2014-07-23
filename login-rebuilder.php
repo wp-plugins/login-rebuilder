@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.2.3
+Version: 1.3.0
 Author URI: http://12net.jp/
 */
 
@@ -15,18 +15,13 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.2.3' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.3.0' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 
 $plugin_login_rebuilder = new login_rebuilder();
 
 class login_rebuilder {
-	var $properties;
-	var $content = "<?php
-define( 'LOGIN_REBUILDER_SIGNATURE', '%sig%' );
-require_once './wp-login.php';
-?>";
 	const LOGIN_REBUILDER_PROPERTIES_NAME = 'login-rebuilder-properties';
 	const LOGIN_REBUILDER_RESPONSE_403 = 1;
 	const LOGIN_REBUILDER_RESPONSE_404 = 2;
@@ -40,46 +35,105 @@ require_once './wp-login.php';
 	const LOGIN_REBUILDER_LOGGING_LIMIT = 100;
 	const LOGIN_REBUILDER_NONCE_NAME = 'login-rebuilder-nonce';
 	const LOGIN_REBUILDER_NONCE_LIFETIME = 1800;
+	const LOGIN_REBUILDER_AJAX_NONCE_NAME = 'login-rebuilder-ajax-nonce';
+
+	var $candidate = array( 'new-login.php', 'your-login.php', 'admin-login.php', 'wordpress-login.php', 'hidden-login.php' );
+	var $properties;
+	var $content = "<?php
+define( 'LOGIN_REBUILDER_SIGNATURE', '%sig%' );
+require_once './wp-login.php';
+?>";
+	var $root_url;		// trailing slash is removed
+	var $root_path;	// trailing slash is removed
+	var $use_site_option = true;
 
 	function __construct() {
-		load_plugin_textdomain( LOGIN_REBUILDER_DOMAIN, false, plugin_basename( dirname( __FILE__ ) ).'/languages' );
-		register_activation_hook( __FILE__ , array( &$this , 'init' ) );
+		register_activation_hook( __FILE__ , array( &$this , 'activation' ) );
 		register_deactivation_hook( __FILE__ , array( &$this , 'deactivation' ) );
-		$candidate = array( 'new-login.php', 'your-login.php', 'admin-login.php', 'wordpress-login.php', 'hidden-login.php' );
-		$this->properties = get_site_option( LOGIN_REBUILDER_PROPERTIES,
-			array( 'status'=>self::LOGIN_REBUILDER_STATUS_IN_PREPARATION,
-					'logging'=>self::LOGIN_REBUILDER_LOGGING_OFF,
-					'page'=>$candidate[ array_rand( $candidate ) ],
-					'page_subscriber'=>'',
-					'keyword'=>$this->generate_keyword(),
-					'response'=>self::LOGIN_REBUILDER_RESPONSE_403 ) );
-		if ( !isset( $this->properties['logging'] ) )
-			$this->properties['logging'] = self::LOGIN_REBUILDER_LOGGING_OFF;
-		if ( is_multisite() )
-			$this->properties['status'] = get_option( LOGIN_REBUILDER_PROPERTIES, self::LOGIN_REBUILDER_STATUS_IN_PREPARATION );
+
+		$this->root_url = ( ( is_ssl() || force_ssl_login() )? "https://": "http://" ).$_SERVER["HTTP_HOST"];
+		$this->root_path = $_SERVER['DOCUMENT_ROOT'];
+		if ( empty( $this->root_path ) ) {
+			list( $scheme, $content_uri ) = explode( "://".$_SERVER["HTTP_HOST"], get_option( 'siteurl' ) );
+			$this->root_path = preg_replace( '/'.str_replace( array( '-', '.', '/' ), array( '\\-', '\\.', '[\\/\\\\]' ), $content_uri ).'/u', '', untrailingslashit( ABSPATH ) );
+		}
+
+		if ( is_multisite() ) {
+			$details = get_blog_details();
+			if ( $details->path != '/' )
+				$this->use_site_option = false;
+		}
+		$this->load_option();
 		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING &&
-			( !@file_exists( ABSPATH.$this->properties['page'] ) || !$this->is_valid_new_login_file() ) ) {
+			( !@file_exists( $this->login_file_path( $this->properties['page'] ) ) || !$this->is_valid_new_login_file() ) ) {
 			$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
 		}
+
 		add_action( 'admin_menu', array( &$this, 'admin_menu' ) );
 		add_action( 'wp_ajax_login_rebuilder_try_save', array( &$this, 'try_save' ) );
 		add_filter( 'plugin_row_meta', array( &$this, 'plugin_row_meta' ), 9, 2 );
+
+		add_filter( 'site_url', array( &$this, 'site_url' ), 10, 4 );
+		add_filter( 'wp_redirect', array( &$this, 'wp_redirect' ), 10, 2 );
+
 		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
 			add_action( 'login_init', array( &$this, 'login_init' ) );
-			if ( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL || $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN )
+			if ( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL ||
+				$this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN )
 				add_filter( 'login_redirect', array( &$this, 'login_redirect' ), 10, 3 );
-			add_filter( 'site_url', array( &$this, 'site_url' ), 10, 4 );
-			add_filter( 'wp_redirect', array( &$this, 'wp_redirect' ), 10, 2 );
 			if ( $this->properties['page_subscriber'] != '' &&
-				strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false &&
+				$this->in_url( $_SERVER['REQUEST_URI'], $this->properties['page_subscriber'] ) &&
 				$this->is_valid_new_login_file( $this->properties['page_subscriber'] ) )
 				add_filter( 'authenticate', array( &$this, 'subscriber_authenticate' ), 99, 3 );
 		}
 	}
-	private function generate_keyword() {
+
+	private function default_properties() {
+		$default_properties = array( 'status'=>self::LOGIN_REBUILDER_STATUS_IN_PREPARATION,
+				'logging'=>self::LOGIN_REBUILDER_LOGGING_OFF,
+				'page'=>$this->candidate[ array_rand( $this->candidate ) ],
+				'page_subscriber'=>'',
+				'keyword'=>$this->generate_keyword(),
+				'response'=>self::LOGIN_REBUILDER_RESPONSE_403 );
+		return $default_properties;
+	}
+	private function load_option() {
+		$default_properties = $this->default_properties();
+		$this->properties = get_site_option( LOGIN_REBUILDER_PROPERTIES, $default_properties );
+		if ( !$this->use_site_option ) {
+			$_properties = get_option( LOGIN_REBUILDER_PROPERTIES, $default_properties );
+			if ( is_numeric( $_properties ) )
+				$_properties = array_merge( $this->properties, array( 'status'=>$_properties ) );
+			$this->properties = $_properties;
+		}
+		if ( !isset( $this->properties['logging'] ) )
+			$this->properties['logging'] = self::LOGIN_REBUILDER_LOGGING_OFF;
+	}
+	private function save_option() {
+		if ( $this->use_site_option )
+			update_site_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
+		else
+			update_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
+	}
+
+	private function _raw_generate_keyword() {
 		return substr( str_shuffle( 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789' ), rand( 0, 60 ), 8 );
 	}
-	function init() {
+	private function generate_keyword() {
+		if ( $this->use_site_option )
+			return $this->_raw_generate_keyword();
+		else {
+			// sub site
+			$properties = get_site_option( LOGIN_REBUILDER_PROPERTIES, '' );
+			if ( empty( $properties ) ) {
+				$properties = $this->default_properties();
+				$properties['keyword'] = $this->_raw_generate_keyword();
+				update_site_option( LOGIN_REBUILDER_PROPERTIES, $properties );
+			}
+			return $properties['keyword'];
+		}
+	}
+	function activation() {
 		if ( get_option( LOGIN_REBUILDER_DB_VERSION_NAME ) != LOGIN_REBUILDER_DB_VERSION ) {
 			update_option( LOGIN_REBUILDER_DB_VERSION_NAME, LOGIN_REBUILDER_DB_VERSION );
 		}
@@ -89,19 +143,18 @@ require_once './wp-login.php';
 		delete_option( LOGIN_REBUILDER_DB_VERSION_NAME );
 		delete_option( LOGIN_REBUILDER_LOGGING_NAME );
 
-		if ( is_multisite() )
-			delete_option( LOGIN_REBUILDER_PROPERTIES );
-		else {
-			$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
-			update_site_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
-		}
+		$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+		$this->save_option();
 	}
 
 	function login_init() {
 		if ( $_GET['action'] == 'postpass' ) return;
+
+		load_plugin_textdomain( LOGIN_REBUILDER_DOMAIN, false, plugin_basename( dirname( __FILE__ ) ).'/languages' );
 		if ( preg_match( '/\/wp\-login\.php/u', $_SERVER['REQUEST_URI'] ) ||
-			!( ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page'] ) !== false || strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false ) && defined( 'LOGIN_REBUILDER_SIGNATURE' ) && $this->properties['keyword'] == LOGIN_REBUILDER_SIGNATURE ) ) {
-			if ( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL || $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_INVALID_REQUEST ) {
+			!( ( $this->in_url( $_SERVER['REQUEST_URI'], $this->properties['page'] ) || $this->in_url( $_SERVER['REQUEST_URI'], $this->properties['page_subscriber'] ) ) && defined( 'LOGIN_REBUILDER_SIGNATURE' ) && $this->properties['keyword'] == LOGIN_REBUILDER_SIGNATURE ) ) {
+			if ( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL ||
+				 $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_INVALID_REQUEST ) {
 				// logging
 				$logging = get_option( LOGIN_REBUILDER_LOGGING_NAME, '' );
 				if ( $logging == '' ) {
@@ -134,7 +187,8 @@ require_once './wp-login.php';
 		}
 	}
 	function login_redirect( $redirect_to, $requested_redirect_to, $user ) {
-		if ( !is_wp_error( $user ) && $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL || $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN ) {
+		if ( !is_wp_error( $user ) && $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL ||
+			$this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN ) {
 			// logging
 			$logging = get_option( LOGIN_REBUILDER_LOGGING_NAME, '' );
 			if ( $logging == '' ) {
@@ -153,40 +207,44 @@ require_once './wp-login.php';
 		return $redirect_to;
 	}
 	function site_url( $url, $path, $orig_scheme, $blog_id ) {
-		$my_login_page = $this->properties['page'];
-		if ( function_exists( 'wp_get_current_user' ) )
-			$user = wp_get_current_user();
-		else
-			$user = (object)array( 'data'=>null );
-		if ( $this->properties['page_subscriber'] != '' && ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
-			$my_login_page = $this->properties['page_subscriber'];
+		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
+			$my_login_page = $this->properties['page'];
+			if ( function_exists( 'wp_get_current_user' ) )
+				$user = wp_get_current_user();
+			else
+				$user = (object)array( 'data'=>null );
+			if ( $this->properties['page_subscriber'] != '' && ( $this->in_url( $_SERVER['REQUEST_URI'], $this->properties['page_subscriber'] ) || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
+				$my_login_page = $this->properties['page_subscriber'];
 
-		if ( $path == 'wp-login.php' &&
-			( is_user_logged_in()  || strpos( $_SERVER['REQUEST_URI'], '/'.$my_login_page ) !== false ) )
-			$url = str_replace( 'wp-login.php', $my_login_page, $url );
+			if ( $path == 'wp-login.php' &&
+				( is_user_logged_in() || $this->in_url( $_SERVER['REQUEST_URI'], $my_login_page ) ) )
+				$url = $this->rewrite_login_url( 'wp-login.php', $my_login_page, $url );
+		}
 		return $url;
 	}
 	function wp_redirect( $location, $status ) {
-		$my_login_page = $this->properties['page'];
-		if ( function_exists( 'wp_get_current_user' ) )
-			$user = wp_get_current_user();
-		else
-			$user = (object)array( 'data'=>null );
-		if ( $this->properties['page_subscriber'] != '' && ( strpos( $_SERVER['REQUEST_URI'], '/'.$this->properties['page_subscriber'] ) !== false || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
-			$my_login_page = $this->properties['page_subscriber'];
-
-		if ( preg_match( '/\/'.str_replace( array( '-', '.' ), array( '\\-', '\\.' ), $my_login_page ).'/u', $_SERVER['REQUEST_URI']) )
-			$location = str_replace( 'wp-login.php', $my_login_page, $location );
-		else if ( preg_match( '/reauth\=1$/u', $location ) ) {
-			if ( is_user_admin() )
-				$scheme = 'logged_in';
+		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
+			$my_login_page = $this->properties['page'];
+			if ( function_exists( 'wp_get_current_user' ) )
+				$user = wp_get_current_user();
 			else
-				$scheme = apply_filters( 'auth_redirect_scheme', '' );
-			if ( $cookie_elements = wp_parse_auth_cookie( '',  $scheme ) ) {
-				extract( $cookie_elements, EXTR_OVERWRITE );
-				$user = get_user_by( 'login', $username );
-				if ( $user ) // timeout
-					$location = str_replace( 'wp-login.php?', $my_login_page.'?', $location );
+				$user = (object)array( 'data'=>null );
+			if ( $this->properties['page_subscriber'] != '' && ( $this->in_url( $_SERVER['REQUEST_URI'], $this->properties['page_subscriber'] ) || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
+				$my_login_page = $this->properties['page_subscriber'];
+
+			if ( $this->in_url( $_SERVER['REQUEST_URI'], $my_login_page ) )
+				$location = $this->rewrite_login_url( 'wp-login.php', $my_login_page, $location );
+			else if ( preg_match( '/reauth\=1$/u', $location ) ) {
+				if ( is_user_admin() )
+					$scheme = 'logged_in';
+				else
+					$scheme = apply_filters( 'auth_redirect_scheme', '' );
+				if ( $cookie_elements = wp_parse_auth_cookie( '',  $scheme ) ) {
+					extract( $cookie_elements, EXTR_OVERWRITE );
+					$user = get_user_by( 'login', $username );
+					if ( $user ) // timeout
+						$location = $this->rewrite_login_url( 'wp-login.php?', $my_login_page.'?', $location );
+				}
 			}
 		}
 		return $location;
@@ -206,23 +264,8 @@ require_once './wp-login.php';
 		return $links;
 	}
 	function admin_menu() {
+		load_plugin_textdomain( LOGIN_REBUILDER_DOMAIN, false, plugin_basename( dirname( __FILE__ ) ).'/languages' );
 		add_options_page( __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), 9, self::LOGIN_REBUILDER_PROPERTIES_NAME, array( &$this, 'properties' ) );
-	}
-
-	private function is_reserved_login_file( $filename ) {
-		return in_array( $filename,
-				array( 'index.php', 'wp-activate.php', 'wp-app.php', 'wp-atom.php', 'wp-blog-header.php',
-					'wp-comments-post.php', 'wp-commentsrss2.php', 'wp-config.php', 'wp-config-sample.php', 'wp-cron.php',
-					'wp-feed.php', 'wp-links-opml.php', 'wp-load.php', 'wp-login.php', 'wp-mail.php',
-					'wp-pass.php', 'wp-rdf.php', 'wp-register.php', 'wp-rss.php', 'wp-rss2.php',
-					'wp-settings.php', 'wp-signup.php', 'wp-trackback.php', 'xmlrpc.php' ) );
-	}
-	private function is_valid_new_login_file( $filename = null ) {
-		if ( is_null( $filename ) )
-			$filename = $this->properties['page'];
-		return 
-			preg_replace( "/\r\n|\r|\n/", "\r", str_replace( '%sig%', $this->properties['keyword'], $this->content ) ) == 
-			preg_replace( "/\r\n|\r|\n/", "\r", trim( @file_get_contents( ABSPATH.$filename ) ) );
 	}
 
 	function properties() {
@@ -233,47 +276,92 @@ require_once './wp-login.php';
 		$show_reload = false;
 		$message = '';
 		if ( isset( $_POST['properties'] ) ) {
-			check_admin_referer( self::LOGIN_REBUILDER_PROPERTIES_NAME );
+			check_admin_referer( self::LOGIN_REBUILDER_PROPERTIES_NAME.$this->nonce_suffix() );
 
 			if ( $this->verify_private_nonce() ) {
 				$_POST['properties']['page'] = trim( $_POST['properties']['page'] );
 				$_POST['properties']['page_subscriber'] = trim( $_POST['properties']['page_subscriber'] );
 				if ( $this->is_reserved_login_file( $_POST['properties']['page'] ) ) {
-					$message = __( 'New login file is system file. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
+					$message = __( 'New login file is system file. Please change a path name.', LOGIN_REBUILDER_DOMAIN );
+					$this->properties = $_POST['properties'];
+				} else if ( $_POST['properties']['page'] != '' && $this->case_subsite_invalid_login_file( $_POST['properties']['page'] ) ) {
+					$message = __( 'The case of the sub-site, new login file is invalid. Please change a path name.', LOGIN_REBUILDER_DOMAIN );
 					$this->properties = $_POST['properties'];
 				} else if ( $_POST['properties']['page_subscriber'] != '' && ( $_POST['properties']['page_subscriber'] == $_POST['properties']['page'] || $this->is_reserved_login_file( $_POST['properties']['page_subscriber'] ) ) ) {
-					$message = __( 'Login file for subscriber is invalid. Please change a file name.', LOGIN_REBUILDER_DOMAIN );
+					$message = __( 'Login file for subscriber is invalid. Please change a path name.', LOGIN_REBUILDER_DOMAIN );
+					$this->properties = $_POST['properties'];
+				} else if ( $_POST['properties']['page_subscriber'] != '' && $this->case_subsite_invalid_login_file( $_POST['properties']['page_subscriber'] ) ) {
+					$message = __( 'The case of the sub-site, login file for subscriber is invalid. Please change a path name.', LOGIN_REBUILDER_DOMAIN );
 					$this->properties = $_POST['properties'];
 				} else {
+					$prev_status = $this->properties['status'];
+					$prev_page = $this->properties['page'];
 					if ( $this->properties['keyword'] != $_POST['properties']['keyword'] ||
 						$this->properties['logging'] != $_POST['properties']['logging'] ||
 						$this->properties['page'] != $_POST['properties']['page'] ||
 						$this->properties['page_subscriber'] != $_POST['properties']['page_subscriber'] ) {
-						$this->properties['keyword'] = $_POST['properties']['keyword'];
 						$this->properties['logging'] = $_POST['properties']['logging'];
-						$this->properties['page'] = $_POST['properties']['page'];
-						$this->properties['page_subscriber'] = $_POST['properties']['page_subscriber'];
+
+						if ( $this->properties['keyword'] != $_POST['properties']['keyword'] &&
+							$this->use_site_option && is_multisite() ) {
+							// subsite keyword update
+							$sites = $this->get_sites( get_current_blog_id() );
+							if ( is_array( $sites ) ) 	foreach ( $sites as $site ) {
+								switch_to_blog( $site->blog_id );
+								$properties = get_option( LOGIN_REBUILDER_PROPERTIES, '' );
+								$properties['keyword'] = $_POST['properties']['keyword'];
+								if ( isset( $properties['page'] ) && !empty( $properties['page'] ) ) {
+									$login_path = $this->login_file_path( $properties['page'] );
+									if ( @file_exists( $login_path ) )
+										$updated = $this->update_login_file_keyword( $login_path, $properties['keyword'] );
+								}
+								if ( isset( $properties['page_subscriber'] ) && !empty( $properties['page_subscriber'] ) ) {
+									$login_path = $this->login_file_path( $properties['page_subscriber'] );
+									if ( @file_exists( $login_path ) )
+										$updated = $this->update_login_file_keyword( $login_path, $properties['keyword'] );
+								}
+								update_option( LOGIN_REBUILDER_PROPERTIES, $properties );
+								restore_current_blog();
+							}
+						}
+						$this->properties['keyword'] = $_POST['properties']['keyword'];
+
+						if ( $this->properties['page'] != $_POST['properties']['page'] ) {
+							$login_path = $this->login_file_path( $this->properties['page'] );
+							if (@file_exists( $login_path ) && $this->is_deletable( $login_path ) ) @unlink( $login_path );
+							$this->properties['page'] = $_POST['properties']['page'];
+						}
+						if ( $this->properties['page_subscriber'] != $_POST['properties']['page_subscriber'] ) {
+							$login_path = $this->login_file_path( $this->properties['page_subscriber'] );
+							if (@file_exists( $login_path ) && $this->is_deletable( $login_path ) ) @unlink( $login_path );
+							$this->properties['page_subscriber'] = $_POST['properties']['page_subscriber'];
+						}
+
 						$result = $this->try_save( array_merge( $_POST['properties'], array( 'mode'=>1 ) ) );
 						if ( $result['update'] ) {
 							$this->properties['status'] = intval( $_POST['properties']['status'] );
-						} else if ( !empty( $this->properties['page'] ) && ( !@file_exists( ABSPATH.$this->properties['page'] ) || !$this->is_valid_new_login_file() ) ) {
+						} else if ( !empty( $this->properties['page'] ) && ( !@file_exists( $this->login_file_path( $this->properties['page'] ) ) || !$this->is_valid_new_login_file() ) ) {
 							$message .= __( "However, failed to write a new login file to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
 							$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
 						}
 						$subscriber = $_POST['properties'];
 						$subscriber['page'] = $subscriber['page_subscriber'];
+						$subscriber['content'] = $subscriber['content_subscriber'];
 						$result = $this->try_save( array_merge( $subscriber, array( 'mode'=>1 ) ) );
 						$message = __( 'Options saved.', LOGIN_REBUILDER_DOMAIN ).' ';
-						if ( !$result['update'] && !empty( $this->properties['page_subscriber'] ) && ( !@file_exists( ABSPATH.$this->properties['page_subscriber'] ) || !$this->is_valid_new_login_file( $this->properties['page_subscriber'] ) ) ) {
+						if ( !$result['update'] && !empty( $this->properties['page_subscriber'] ) && ( !@file_exists( $this->login_file_path( $this->properties['page_subscriber'] ) ) || !$this->is_valid_new_login_file( $this->properties['page_subscriber'] ) ) ) {
 							$message .= __( "However, failed to write a login file for subscriber to disk.\nPlease change into the enabled writing of a disk or upload manually.", LOGIN_REBUILDER_DOMAIN );
 						}
 					} else if ( $this->properties['status'] != intval( $_POST['properties']['status'] ) ) {
 						$message = __( 'Options saved.', LOGIN_REBUILDER_DOMAIN ).' ';
 						$this->properties['status'] = intval( $_POST['properties']['status'] );
 						if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
-							if ( !@file_exists( ABSPATH.$this->properties['page'] ) ) {
-								$message .= __( "However, a new login file was not found.", LOGIN_REBUILDER_DOMAIN );
-								$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+							if ( !@file_exists( $this->login_file_path( $this->properties['page'] ) ) ) {
+								$result = $this->try_save( array_merge( $_POST['properties'], array( 'mode'=>1 ) ) );
+								if ( !$result['update'] ) {
+									$message .= __( "However, a new login file was not found.", LOGIN_REBUILDER_DOMAIN );
+									$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
+								}
 							} else if ( !$this->is_valid_new_login_file() ) {
 								$message .= __( "However, the contents of a new login file are not in agreement.", LOGIN_REBUILDER_DOMAIN );
 								$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
@@ -281,15 +369,18 @@ require_once './wp-login.php';
 						}
 					}
 					$this->properties['response'] = intval( $_POST['properties']['response'] );
-					update_site_option( LOGIN_REBUILDER_PROPERTIES, $this->properties );
-					if ( is_multisite() )
-						update_option( LOGIN_REBUILDER_PROPERTIES, $this->properties['status'] );
+					$this->save_option();
+
+					// rewrite logout url
 					if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_IN_PREPARATION ) {
-						$logout_from = site_url( $this->properties['page'] );
-						$logout_to = site_url( 'wp-login.php' );
+						$logout_from = $this->login_file_url( ( $prev_status == self::LOGIN_REBUILDER_STATUS_WORKING )? $prev_page: $this->properties['page'] );
+						$logout_to = site_url().'/wp-login.php';
 					} else {
-						$logout_from = site_url( 'wp-login.php' );
-						$logout_to = site_url( $this->properties['page'] );
+						if ( $prev_status == self::LOGIN_REBUILDER_STATUS_WORKING )
+							$logout_from = $this->login_file_url( $prev_page );
+						else
+							$logout_from = site_url().'/wp-login.php';
+						$logout_to = $this->login_file_url( $this->properties['page'] );
 					}
 				}
 				$this->clear_private_nonce();
@@ -328,21 +419,24 @@ require_once './wp-login.php';
 
 <tr valign="top">
 <th><label for="properties_keyword"><?php _e( 'Login file keyword :', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
-<td><input type="text" name="properties[keyword]" id="properties_keyword" value="<?php _e( $this->properties['keyword'] ); ?>" class="regular-text code" /></td>
+<td><input type="text" name="properties[keyword]" id="properties_keyword" value="<?php _e( $this->properties['keyword'] ); ?>" class="regular-text code" <?php if ( !$this->use_site_option ) echo 'readonly="readonly"'; ?> /></td>
 </tr>
 
 <tr valign="top">
-<th rowspan="2"><label for="properties_page"><?php _e( 'New login file :', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
-<td><input type="text" name="properties[page]" id="properties_page" value="<?php _e( $this->properties['page'] ); ?>" class="regular-text code" />&nbsp;<span id="writable">&nbsp;</span></td>
+<th><label for="properties_page"><?php _e( 'New login file :', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
+<td><input type="text" name="properties[page]" id="properties_page" value="<?php _e( $this->properties['page'] ); ?>" class="regular-text code" />
+<p style="padding: 0 0 0 1em; font-size: 92%; color: #666666;">Path: <span id="path_login" class="path">&nbsp;</span> <span id="writable" class="writable">&nbsp;</span><br />
+URL: <span id="url_login" class="url">&nbsp;</span><br />
+<textarea name="properties[content]" id="login_page_content" rows="4" style="font-family:monospace; width: 96%;" readonly="readonly" class="content"></textarea><input type="hidden" id="content_template" value="<?php echo $this->content; ?>" /></p>
+</td>
 </tr>
-
-<tr valign="top">
-<td><textarea  name="properties[content]" id="login_page_content" rows="4" cols="60" style="font-family:monospace;" readonly="readonly"></textarea><input type="hidden" id="content_template" value="<?php echo $this->content; ?>" /></td>
-</tr>
-
 <tr valign="top">
 <th><label for="properties_page"><?php _e( 'Login file for subscriber:', LOGIN_REBUILDER_DOMAIN ); ?></label></th>
-<td><input type="text" name="properties[page_subscriber]" id="properties_page_subscriber" value="<?php _e( $this->properties['page_subscriber'] ); ?>" class="regular-text code" />&nbsp;<span id="writable_subscriber">&nbsp;</span></td>
+<td><input type="text" name="properties[page_subscriber]" id="properties_page_subscriber" value="<?php _e( $this->properties['page_subscriber'] ); ?>" class="regular-text code" />
+<p style="padding: 0 0 0 1em; font-size: 92%; color: #666666;">Path: <span id="path_subscriber" class="path">&nbsp;</span> <span id="writable_subscriber" class="writable">&nbsp;</span><br />
+URL: <span id="url_subscriber" class="url">&nbsp;</span><br />
+<textarea name="properties[content_subscriber]" id="subscriber_page_content" rows="4" style="font-family:monospace; width: 96%;" readonly="readonly" class="content"></textarea></p>
+</td>
 </tr>
 
 <tr valign="top">
@@ -368,7 +462,7 @@ require_once './wp-login.php';
 <input type="submit" name="submit" value="<?php esc_attr_e( 'Save Changes' ); ?>" class="button-primary" />
 <?php if ( count( $logging['invalid'] ) > 0 || count( $logging['login'] ) > 0 ) { ?>
 <input type="button" name="view-log" id="view-log" value="<?php esc_attr_e( 'View log', LOGIN_REBUILDER_DOMAIN ); ?>" class="button" />
-<?php } wp_nonce_field( self::LOGIN_REBUILDER_PROPERTIES_NAME ); $this->private_nonce_field(); ?>
+<?php } wp_nonce_field( self::LOGIN_REBUILDER_PROPERTIES_NAME.$this->nonce_suffix() ); $this->private_nonce_field(); ?>
 </td>
 </tr>
 </table>
@@ -408,28 +502,61 @@ foreach ( $logging['login'] as $log ) {
 </div>
 <script type="text/javascript">
 ( function($) {
+<?php if ( $logout_from != $logout_to ) { ?>
 	$( 'a' ).each( function () {
-		$( this ).attr( 'href', jQuery( this ).attr( 'href' ).replace( '<?php echo $logout_from; ?>', '<?php echo $logout_to; ?>' ) );
+		$( this ).attr( 'href', $( this ).attr( 'href' ).replace( '<?php echo $logout_from; ?>', '<?php echo $logout_to; ?>' ) );
 	} );
+<?php } ?>
 	$( '#properties_keyword' ).blur( function () {
-		$( '#login_page_content' ).val( $( '#content_template' ).val().replace( '%sig%', $( this ).val() ) );
+		if ( $( '#properties_page' ).val() != '' && $.trim( $( '#login_page_content' ).val() ) != '' ) {
+			$( '#login_page_content' ).val( $( '#login_page_content' ).val().replace( /'LOGIN_REBUILDER_SIGNATURE', '[0-9a-zA-Z]+'/, "'LOGIN_REBUILDER_SIGNATURE', '"+$( this ).val()+"'" ) );
+		}
+		if ( $( '#properties_page_subscriber' ).val() != '' && $.trim( $( '#subscriber_page_content' ).val() ) != '' ) {
+			$( '#subscriber_page_content' ).val( $( '#subscriber_page_content' ).val().replace( /'LOGIN_REBUILDER_SIGNATURE', '[0-9a-zA-Z]+'/, "'LOGIN_REBUILDER_SIGNATURE', '"+$( this ).val()+"'" ) );
+		}
 	} );
 	$( '#properties_page, #properties_page_subscriber' ).blur( function () {
 		var page_elm = $( this );
-		var url = $.trim( $( this ).val() );
-		if ( url != '' ) {
+		var uri = $.trim( $( this ).val() );
+		var valid_uri = ( uri != '' );
+<?php if ( !$this->use_site_option ) { ?>
+		if ( uri != '' && uri.indexOf( '/' ) != -1 ) {
+			alert( "<?php _e( "The case of the sub-site, you can not contain '/' in the path name. Please change a path name.", LOGIN_REBUILDER_DOMAIN ); ?>" );
+			$( this ).next().find( 'span.path,span.writable,span.url' ).text( '' );
+			$( this ).focus();
+			valid_uri = false;
+		}
+<?php } ?>
+		if ( valid_uri ) {
+			$( 'input[name=submit]' ).attr( 'disabled', 'disabled' );
 			$.post( '<?php echo admin_url( 'admin-ajax.php' ); ?>',
-				{ action: 'login_rebuilder_try_save', mode: 0, page: url },
+				{ action: 'login_rebuilder_try_save', mode: 0, page: uri, _ajax_nonce: '<?php echo wp_create_nonce( self::LOGIN_REBUILDER_AJAX_NONCE_NAME.$this->nonce_suffix() ); ?>' },
 				function( response ) {
-					if ( response.data.writable ) {
-						page_elm.next( 'span' ).text( '[<?php _e( 'Writing is possible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'blue' );
-					} else {
-						page_elm.next( 'span' ).text( '[<?php _e( 'Writing is impossible', LOGIN_REBUILDER_DOMAIN ); ?>]' ).css( 'color', 'orange' );
-					}
-				}, 'json' );
+					page_elm.next().each( function () {
+						$( this ).find( 'span.path' ).text( response.data.path );
+						if ( response.data.exists )
+							$( this ).find( 'span.url' ).html( '<a href="'+response.data.url+'" target="_blank">'+response.data.url+'</a>' );
+						else
+							$( this ).find( 'span.url' ).text( response.data.url );
+						if ( response.data.exists )
+							out_exists = '<?php _e( 'File exists, ', LOGIN_REBUILDER_DOMAIN ); ?>';
+						else
+							out_exists = '<?php _e( 'File not found, ', LOGIN_REBUILDER_DOMAIN ); ?>';
+						if ( response.data.writable ) {
+							out_writing = '<?php _e( 'Writing is possible', LOGIN_REBUILDER_DOMAIN ); ?>';
+							out_color = 'blue';
+						} else {
+							out_writing = '<?php _e( 'Writing is impossible', LOGIN_REBUILDER_DOMAIN ); ?>';
+							out_color = 'orange';
+						}
+						$( this ).find( 'span.writable' ).text( '['+out_exists+out_writing+']' ).css( 'color', out_color );
+						$( this ).find( 'textarea.content' ).text( response.data.content.replace( '%sig%', $( '#properties_keyword' ).val() ) );
+					} );
+				}, 'json' ).always( function() {
+					$( 'input[name=submit]' ).removeAttr( 'disabled' );
+				} );
 		}
 	} );
-	$( '#properties_keyword' ).blur();
 	$( '#properties_page' ).blur();
 	$( '#properties_page_subscriber' ).blur();
 	$( '#view-log' ).click( function () { $( '#log-content' ).fadeToggle(); } );
@@ -438,11 +565,117 @@ foreach ( $logging['login'] as $log ) {
 <?php
 	}
 
+	// private login file functions 
+	private function rewrite_login_url( $wp_login, $page, $url ) {
+		if ( strpos( $url, $wp_login ) !== false ) {
+			$new_url = $this->login_file_url( $page );
+			if ( ( $pos = strpos( $url, '?' ) ) !== false )
+				$new_url .= substr( $url, $pos );
+			return $new_url;
+		} else
+			return $url;
+	}
+	private function in_url( $url, $page ) {
+		return ( strpos( $url, '/'.ltrim( $page , '/' ) ) !== false );
+	}
+	private function login_file_url( $page ) {
+		if ( strpos( $page, '/' ) !== false )
+			return $this->root_url.'/'.ltrim( $page , '/' );
+		else
+			return site_url( $page );
+	}
+	private function login_file_path( $page ) {
+		if ( strpos( $page, '/' ) !== false )
+			$path = $this->root_path.'/'.ltrim( $page , '/' );
+		else
+			$path = ABSPATH.$page;
+		if ( function_exists( 'wp_normalize_path' ) )
+			$path = wp_normalize_path( $path ); 
+		return $path;
+	}
+	private function rewrite_login_content( $page, $content ) {
+		if ( strpos( $page, '/' ) !== false ) {
+			$wp_login = '';
+			if ( defined( 'ABSPATH' ) && file_exists( ABSPATH.'wp-login.php' ) )
+				$wp_login = ABSPATH.'wp-login.php';
+			else if ( defined( 'WPINC' ) && file_exists( ABSPATH.WPINC.'/wp-login.php' ) )
+				$wp_login = ABSPATH.WPINC.'/wp-login.php';
+			if ( !empty( $wp_login ) ) {
+				if ( function_exists( 'wp_normalize_path' ) )
+					$wp_login = wp_normalize_path( $wp_login );
+				$content = str_replace( './wp-login.php', $wp_login, $content );
+			}
+		}
+		return $content;
+	}
+	private function get_sites( $ignore_ids = null ) {
+		if ( is_multisite() ) {
+			global $wpdb;
+			$query = "SELECT * FROM $wpdb->blogs WHERE 1=1";
+			if ( !empty( $ignore_ids ) )
+				$query .= " AND blog_id NOT IN (".implode( ',', (array)$ignore_ids ).")";
+			return $wpdb->get_results( $query );
+		} else
+			return array();
+	}
+	private function is_deletable( $path ) {
+		if ( $this->is_reserved_login_file( basename( $path ) ) ) return false;
+		if ( !$this->use_site_option ) {
+			$sites = $this->get_sites( get_current_blog_id() );
+			if ( is_array( $sites ) ) 	foreach ( $sites as $site ) {
+				switch_to_blog( $site->blog_id );
+				$properties = get_option( LOGIN_REBUILDER_PROPERTIES, '' );
+				if ( isset( $properties['page'] ) && !empty( $properties['page'] ) ) {
+					$login_path = $this->login_file_path( $properties['page'] );
+					if ( $login_path == $path ) return false;
+				}
+				if ( isset( $properties['page_subscriber'] ) && !empty( $properties['page_subscriber'] ) ) {
+					$login_path = $this->login_file_path( $properties['page_subscriber'] );
+					if ( $login_path == $path ) return false;
+				}
+				restore_current_blog();
+			}
+		}
+		return true;
+	}
+	private function update_login_file_keyword( $login_path, $new_keyword ) {
+		$updated = false;
+		$content = @file_get_contents( $login_path );
+		if ( $content !== false && ( $fp = @fopen( $login_path, 'w' ) ) !== false ) {
+			$content = preg_replace( "/'LOGIN_REBUILDER_SIGNATURE', '[0-9a-zA-Z]+'/u", "'LOGIN_REBUILDER_SIGNATURE', '{$new_keyword}'", $content );
+			@fwrite( $fp, $content );
+			@fclose( $fp );
+			$updated = true;
+		}
+		return $updated;
+	}
+	private function is_reserved_login_file( $filename ) {
+		return in_array( $filename,
+				array( 'index.php', 'wp-activate.php', 'wp-app.php', 'wp-atom.php', 'wp-blog-header.php',
+					'wp-comments-post.php', 'wp-commentsrss2.php', 'wp-config.php', 'wp-config-sample.php', 'wp-cron.php',
+					'wp-feed.php', 'wp-links-opml.php', 'wp-load.php', 'wp-login.php', 'wp-mail.php',
+					'wp-pass.php', 'wp-rdf.php', 'wp-register.php', 'wp-rss.php', 'wp-rss2.php',
+					'wp-settings.php', 'wp-signup.php', 'wp-trackback.php', 'xmlrpc.php' ) );
+	}
+	private function is_valid_new_login_file( $filename = null ) {
+		if ( is_null( $filename ) )
+			$filename = $this->properties['page'];
+		return
+			preg_replace( "/\r\n|\r|\n/", "\r", $this->rewrite_login_content( $filename, str_replace( '%sig%', $this->properties['keyword'], $this->content ) ) ) == 
+			preg_replace( "/\r\n|\r|\n/", "\r", trim( @file_get_contents( $this->login_file_path( $filename ) ) ) );
+	}
+	private function case_subsite_invalid_login_file( $filename ) {
+		if ( empty( $finename ) ) return false;
+		if ( $this->use_site_option ) return false;
+		return ( strpos( $filename, '/' ) !== false );
+	}
 	function try_save( $param = null ) {
 		if ( is_array( $param ) && count( $param ) > 0 )
 			extract( $param );
-		else
+		else {
+			check_ajax_referer( self::LOGIN_REBUILDER_AJAX_NONCE_NAME.$this->nonce_suffix() );
 			extract( $_POST );
+		}
 		if ( !isset( $mode ) || !isset( $page ) ) {
 			if ( is_null( $param ) || $param == '' )
 				exit;
@@ -451,10 +684,12 @@ foreach ( $logging['login'] as $log ) {
 		}
 		$data = array(
 			'request'=>$page,
-			'path'=>ABSPATH.$page,
+			'path'=>$this->login_file_path( $page ),
+			'url'=>$this->login_file_url( $page ),
 			'exists'=>false,
 			'writable'=>false,
-			'update'=>false );
+			'update'=>false,
+			'content'=>$this->rewrite_login_content( $page, $this->content ) );
 		// exists
 		if ( @file_exists( $data['path'] ) )
 			$data['exists'] = true;
@@ -484,6 +719,11 @@ foreach ( $logging['login'] as $log ) {
 			}
 		} else
 			return $data;
+	}
+
+	// private nonce functions
+	private function nonce_suffix() {
+		return date_i18n( 'His TO', filemtime( __FILE__ ) );
 	}
 	private function init_private_nonce() {
 		if ( get_option( self::LOGIN_REBUILDER_NONCE_NAME, '' ) == '' ) {
@@ -517,7 +757,7 @@ foreach ( $logging['login'] as $log ) {
 			// Do not update the nonce value.
 			$nonce = $private_nonce[$user_id]['nonce'];
 		} else {
-			$nonce = wp_create_nonce( $action.$now%10000 );
+			$nonce = wp_create_nonce( $action.($now%10000).$this->nonce_suffix() );
 			$private_nonce[$user_id] = array( 'nonce'=>$nonce, 'access'=>$now );
 			update_option( self::LOGIN_REBUILDER_NONCE_NAME, $private_nonce );
 		}
