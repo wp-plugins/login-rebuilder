@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.3.0
+Version: 1.3.1
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.3.0' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.3.1' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 
@@ -74,6 +74,7 @@ require_once './wp-login.php';
 		add_filter( 'plugin_row_meta', array( &$this, 'plugin_row_meta' ), 9, 2 );
 
 		add_filter( 'site_url', array( &$this, 'site_url' ), 10, 4 );
+		add_filter( 'network_site_url', array( &$this, 'network_site_url' ), 10, 3 );
 		add_filter( 'wp_redirect', array( &$this, 'wp_redirect' ), 10, 2 );
 
 		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
@@ -216,11 +217,14 @@ require_once './wp-login.php';
 			if ( $this->properties['page_subscriber'] != '' && ( $this->in_url( $_SERVER['REQUEST_URI'], $this->properties['page_subscriber'] ) || ( isset( $user->data ) && !$user->has_cap( 'edit_posts' ) ) ) )
 				$my_login_page = $this->properties['page_subscriber'];
 
-			if ( $path == 'wp-login.php' &&
+			if ( ( $path == 'wp-login.php' || preg_match( '/wp-login\.php\?action=\w+/', $path ) ) &&
 				( is_user_logged_in() || $this->in_url( $_SERVER['REQUEST_URI'], $my_login_page ) ) )
 				$url = $this->rewrite_login_url( 'wp-login.php', $my_login_page, $url );
 		}
 		return $url;
+	}
+	function network_site_url( $url, $path, $orig_scheme ) {
+		return $this->site_url( $url, $path, $orig_scheme, 0 );
 	}
 	function wp_redirect( $location, $status ) {
 		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
