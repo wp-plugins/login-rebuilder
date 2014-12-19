@@ -3,8 +3,8 @@ Contributors: tmatsuur
 Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
 Requires at least: 3.2.0
-Tested up to: 4.0.0
-Stable tag: 1.3.1
+Tested up to: 4.1.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,12 +66,19 @@ Please delete the file, when a new login page becomes unnecessary.
 
 Please delete the new login page file, this plug-in returns during preparation.
 
+= Can I set the login page of the only administrators? =
+
+If it is version 1.4.0 or later, you can choose the role of non-administrator for the `Secondary login file`.
+
 == Screenshots ==
 
 1. This plug-in menu.
 2. This plug-in settings.
 
 == Changelog ==
+
+= 1.4.0 =
+* `Login file for subscriber` has changed the name to `Secondary login file`. `Secondary login file` will function as the login file for subscribers in the same way as before. In addition, the administrator can choose the role of login possible user.
 
 = 1.3.1 =
 * Bug fix: Password reset available.
