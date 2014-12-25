@@ -4,7 +4,7 @@ Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
 Requires at least: 3.2.0
 Tested up to: 4.1.0
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ If it is version 1.4.0 or later, you can choose the role of non-administrator fo
 2. This plug-in settings.
 
 == Changelog ==
+
+= 1.4.1 =
+* Bug fix: A parameter of the function was adjusted.
 
 = 1.4.0 =
 * `Login file for subscriber` has changed the name to `Secondary login file`. `Secondary login file` will function as the login file for subscribers in the same way as before. In addition, the administrator can choose the role of login possible user.

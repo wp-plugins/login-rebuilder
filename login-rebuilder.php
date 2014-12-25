@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.4.0
+Version: 1.4.1
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.4.0' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.4.1' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 
@@ -232,7 +232,7 @@ require_once './wp-login.php';
 	}
 	function admin_menu() {
 		load_plugin_textdomain( LOGIN_REBUILDER_DOMAIN, false, plugin_basename( dirname( __FILE__ ) ).'/languages' );
-		add_options_page( __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), 9, self::LOGIN_REBUILDER_PROPERTIES_NAME, array( &$this, 'properties' ) );
+		add_options_page( __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), __( 'Login rebuilder', LOGIN_REBUILDER_DOMAIN ), 'manage_options', self::LOGIN_REBUILDER_PROPERTIES_NAME, array( &$this, 'properties' ) );
 	}
 	function properties() {
 		global $wp_version;
