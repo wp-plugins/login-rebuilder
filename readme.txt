@@ -3,8 +3,8 @@ Contributors: tmatsuur
 Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
 Requires at least: 3.2.0
-Tested up to: 4.1.0
-Stable tag: 1.4.1
+Tested up to: 4.1.1
+Stable tag: 1.4.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -46,7 +46,7 @@ Please contact to me.
 3. The plug-in is made effective.
 4. You will find `Login rebuilder` submenu in `Settings` menu.
 5. Please enter `New login file`, and choose `working`. Next, please click `Save Changes` button.
-6. `Login file for subscriber` is optional. It becomes a page to which only subscribers can log in there. 
+6. `Login file for subscriber` is optional. It becomes a page to which only subscribers can log in there.
 
 == Frequently Asked Questions ==
 
@@ -76,6 +76,9 @@ If it is version 1.4.0 or later, you can choose the role of non-administrator fo
 2. This plug-in settings.
 
 == Changelog ==
+
+= 1.4.2 =
+* Bug fix [important]: Changed the process of AJAX request.
 
 = 1.4.1 =
 * Bug fix: A parameter of the function was adjusted.
@@ -119,8 +122,8 @@ If it is version 1.4.0 or later, you can choose the role of non-administrator fo
 
 = 1.0.3 =
 * Bug fix:
- 1.A few array key name was corrected. 
- 2.The URL of properties form was corrected. 
+ 1.A few array key name was corrected.
+ 2.The URL of properties form was corrected.
 
 = 1.0.2 =
 * Bug fix:

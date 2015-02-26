@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.4.1
+Version: 1.4.2
 Author URI: http://12net.jp/
 */
 
@@ -15,7 +15,7 @@ This program is licensed under the GNU GPL Version 2.
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.4.1' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.4.2' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 
@@ -112,10 +112,10 @@ require_once './wp-login.php';
 				$this->_logging(
 					'invalid',
 					array(
-						'time'=>time(), 
-						'ip'=>$_SERVER['REMOTE_ADDR'], 
-						'uri'=>$_SERVER['REQUEST_URI'], 
-						'id'=>( empty( $_POST['log'] )? '': $_POST['log'] ), 
+						'time'=>time(),
+						'ip'=>$_SERVER['REMOTE_ADDR'],
+						'uri'=>$_SERVER['REQUEST_URI'],
+						'id'=>( empty( $_POST['log'] )? '': $_POST['log'] ),
 						'pw'=>( empty( $_POST['pwd'] )? '': $_POST['pwd'] ) )
 					);
 			}
@@ -141,7 +141,7 @@ require_once './wp-login.php';
 				'login',
 				array(
 					'time'=>time(),
-					'ip'=>$_SERVER['REMOTE_ADDR'], 
+					'ip'=>$_SERVER['REMOTE_ADDR'],
 					'uri'=>$_SERVER['REQUEST_URI'],
 					'id'=>$user->ID )
 				);
@@ -485,7 +485,7 @@ foreach ( $logging['login'] as $log ) {
 </div>
 <script type="text/javascript">
 ( function($) {
-<?php if ( $logout_from != $logout_to ) { ?>
+<?php if ( isset( $logout_to ) && $logout_from != $logout_to ) { ?>
 	$( 'a' ).each( function () {
 		$( this ).attr( 'href', $( this ).attr( 'href' ).replace( '<?php echo $logout_from; ?>', '<?php echo $logout_to; ?>' ) );
 	} );
@@ -568,6 +568,12 @@ foreach ( $logging['login'] as $log ) {
 				'writable'=>false,
 				'update'=>false,
 				'content'=>$this->_rewrite_login_content( $page, $this->content ) );
+		if ( defined( 'DOING_AJAX' ) && $mode == 1 ) {
+			// invalid access
+			$mode = 0;
+			$data['path'] = '';
+			$data['content'] = '';
+		}
 		// exists
 		if ( @file_exists( $data['path'] ) )
 			$data['exists'] = true;
@@ -681,7 +687,7 @@ foreach ( $logging['login'] as $log ) {
 		return false;
 	}
 
-	// private login file functions 
+	// private login file functions
 	private function _rewrite_login_url( $wp_login, $page, $url ) {
 		if ( strpos( $url, $wp_login ) !== false ) {
 			$new_url = $this->_login_file_url( $page );
@@ -706,7 +712,7 @@ foreach ( $logging['login'] as $log ) {
 		else
 			$path = ABSPATH.$page;
 		if ( function_exists( 'wp_normalize_path' ) )
-			$path = wp_normalize_path( $path ); 
+			$path = wp_normalize_path( $path );
 		return $path;
 	}
 	private function _rewrite_login_content( $page, $content ) {
@@ -777,7 +783,7 @@ foreach ( $logging['login'] as $log ) {
 		if ( is_null( $filename ) )
 			$filename = $this->properties['page'];
 		return
-			preg_replace( "/\r\n|\r|\n/", "\r", $this->_rewrite_login_content( $filename, str_replace( '%sig%', $this->properties['keyword'], $this->content ) ) ) == 
+			preg_replace( "/\r\n|\r|\n/", "\r", $this->_rewrite_login_content( $filename, str_replace( '%sig%', $this->properties['keyword'], $this->content ) ) ) ==
 			preg_replace( "/\r\n|\r|\n/", "\r", trim( @file_get_contents( $this->_login_file_path( $filename ) ) ) );
 	}
 	private function _case_subsite_invalid_login_file( $filename ) {
