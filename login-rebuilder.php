@@ -4,18 +4,18 @@ Plugin Name: Login rebuilder
 Plugin URI: http://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plug-in will make a new login page for your site.
 Author: tmatsuur
-Version: 1.4.2
+Version: 1.4.3
 Author URI: http://12net.jp/
 */
 
 /*
- Copyright (C) 2013-2014 tmatsuur (Email: takenori dot matsuura at 12net dot jp)
+ Copyright (C) 2013-2015 tmatsuur (Email: takenori dot matsuura at 12net dot jp)
 This program is licensed under the GNU GPL Version 2.
 */
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '1.4.2' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '1.4.3' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 
@@ -204,6 +204,37 @@ require_once './wp-login.php';
 			}
 		}
 		return $location;
+	}
+	/**
+	 * Returns the URL that allows the users other than the administrator to log in to the site.
+	 *
+	 * @since 1.4.3
+	 *
+	 * @param string $redirect Path to redirect to on login. Optional. Default: ''.
+	 * @param int $blog_id The id of the blog. Optional. Default: 0 (current blog).
+	 * @return string Secondary log in URL.
+	 */
+	function wp_secondary_login_url( $redirect = '', $blog_id = 0 ) {
+		$login_url = '';
+		if ( is_multisite() && !empty( $blog_id ) ) {
+			switch_to_blog( $blog_id );
+			$site_url = get_option( 'siteurl' );
+			$blog_properties = get_option( LOGIN_REBUILDER_PROPERTIES );
+			restore_current_blog();
+			if ( isset( $blog_properties['status'] ) && $blog_properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING && !empty( $blog_properties['page_subscriber'] ) ) {
+				$login_url = set_url_scheme( $site_url, 'login' );
+				$login_url .= '/' . ltrim( $blog_properties['page_subscriber'], '/' );
+				if ( !empty( $redirect ) )
+					$login_url = add_query_arg( 'redirect_to', urlencode( $redirect ), $login_url );
+			}
+		} else {
+			if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING && !empty( $this->properties['page_subscriber'] ) ) {
+				$login_url = $this->_login_file_url( $this->properties['page_subscriber'] );
+				if ( !empty( $redirect ) )
+					$login_url = add_query_arg( 'redirect_to', urlencode( $redirect ), $login_url );
+			}
+		}
+		return $login_url;
 	}
 	function role_authenticate( $user, $username, $password ) {
 		if ( !is_a( $user, 'WP_User' ) )

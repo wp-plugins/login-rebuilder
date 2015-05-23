@@ -4,7 +4,7 @@ Donate link: http://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure
 Requires at least: 3.2.0
 Tested up to: 4.1.1
-Stable tag: 1.4.2
+Stable tag: 1.4.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ If it is version 1.4.0 or later, you can choose the role of non-administrator fo
 2. This plug-in settings.
 
 == Changelog ==
+
+= 1.4.3 =
+* `wp_secondary_login_url` method added.
 
 = 1.4.2 =
 * Bug fix [important]: Changed the process of AJAX request.
